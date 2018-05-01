@@ -194,7 +194,7 @@ def build_vocab():
     pos_vocab = list(all_pos)
     dep_vocab = list(all_dep)
 
-    #.....
+    #test
 
 
 
