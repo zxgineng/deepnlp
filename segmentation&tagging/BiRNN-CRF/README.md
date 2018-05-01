@@ -1,4 +1,4 @@
-# BiLSTM-CRF 
+# BiRNN-CRF 
 
 TensorFlow implementation of [Character-based Joint Segmentation and POS Tagging for Chinese
 using Bidirectional RNN-CRF](https://arxiv.org/pdf/1704.01314.pdf). (2017. 04)
