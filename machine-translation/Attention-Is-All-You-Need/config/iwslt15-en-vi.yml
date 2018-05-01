@@ -1,0 +1,35 @@
+data:
+  base_path: 'data/'
+  raw_data_path: 'iwslt15_en-vi'
+  processed_path: 'processed_iwslt15_en-vi'
+  word_threshold: 1
+  max_seq_length: 200
+
+  PAD_ID: 0
+  UNK_ID: 1
+  START_ID: 2
+  EOS_ID: 3
+
+model:
+  batch_size: 64
+  num_layers: 3
+  model_dim: 256
+  num_heads: 4
+  linear_key_dim: 16
+  linear_value_dim: 16
+  ffn_dim: 1024
+  dropout: 0.1
+
+train:
+  warmup_steps: 1000
+  optimizer: 'Adam'
+
+  train_steps: 10000
+  model_dir: 'logs/iwslt15_en-vi'
+
+  save_checkpoints_steps: 500
+  check_hook_n_iter: 100
+  min_eval_frequency: 2000
+
+  debug: False
+

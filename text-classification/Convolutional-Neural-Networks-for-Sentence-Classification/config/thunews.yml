@@ -1,0 +1,33 @@
+data:
+  base_path: 'data/'
+  raw_data_path: 'news'
+  processed_path: 'processed_news'
+  vocab_size: 5000
+  num_classes: 10
+  max_seq_length: 600
+
+model:
+  batch_size: 128
+  embedding_dim: 200
+  num_filters: 256
+  kernel_sizes:
+    - 3
+    - 4
+    - 5
+  dropout_keep_prob: 0.5
+
+train:
+  learning_rate: 0.001
+  learning_decay_steps: 1000
+  learning_decay_rate: 0.8
+  optimizer: 'Adam'
+
+  max_steps: 20000
+  model_dir: 'logs/thunews'
+
+  save_checkpoints_steps: 391
+  check_hook_n_iter: 100
+  min_eval_frequency: 391
+
+  debug: False
+
