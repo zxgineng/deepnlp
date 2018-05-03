@@ -1,30 +1,26 @@
 data:
   base_path: 'data/'
-  vocab_size: 5000
-  num_classes: 10
-  max_seq_length: 600
+  num_stack_word: 3
+  children_stack_range: 2
+  wordvec_file: 'word_emb.pkl'
+  posvec_file: 'pos_emb.pkl'
+  depvec_file: 'dep_emb.pkl'
+  num_dep: 39
 
 model:
-  batch_size: 128
-  embedding_dim: 200
-  num_filters: 256
-  kernel_sizes:
-    - 3
-    - 4
-    - 5
+  fc1_unit: 200
+  reg_scale: 0.00000001
   dropout_keep_prob: 0.5
 
 train:
+  batch_size: 2048
   learning_rate: 0.001
-  learning_decay_steps: 1000
-  learning_decay_rate: 0.8
   optimizer: 'Adam'
 
-  max_steps: 20000
-  model_dir: 'logs/thunews'
+  epoch: 10
+  model_dir: 'logs/MLP-Parser'
 
-  save_checkpoints_steps: 391
+  save_checkpoints_steps: 1000
   check_hook_n_iter: 100
-  min_eval_frequency: 391
 
   debug: False
