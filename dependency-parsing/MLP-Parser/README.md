@@ -101,7 +101,7 @@ monday ---> it 	 nsubj
 monday ---> , 	 punct
 monday ---> no 	 neg
 monday ---> . 	 punct
-&lt;root&gt; ---> monday 	 root
+<root> ---> monday 	 root
 ********************
 text:  the interest-only securities will be sold separately by bt securities .
 securities ---> interest-only 	 amod
@@ -114,5 +114,5 @@ securities ---> bt 	 compound
 securities ---> by 	 case
 sold ---> securities 	 nmod
 sold ---> . 	 punct
-&lt;root&gt; ---> sold 	 root
+<root> ---> sold 	 root
 ```
