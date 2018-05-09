@@ -1,0 +1,23 @@
+data:
+  base_path: 'data/'
+  wordvec_file: 'word_emb.pkl'
+
+model:
+  num_lstm_layer: 4
+  num_class: 89
+  lstm_unit: 200
+
+train:
+  batch_size: 80
+  learning_rate: 0.001
+  clip_gradients: 1.0
+
+  keep_prob: 0.9
+
+  epoch: 500
+  model_dir: 'logs/bilstm-highway'
+
+  save_checkpoints_steps: 1000
+  check_hook_n_iter: 100
+
+  debug: False
