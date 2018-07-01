@@ -144,9 +144,9 @@ Run all evaluation on the test data
 |![images](images/seg-score.png)|
 
 Dataset: CNC  
-On this dataset, segmentation result of 3-gram joint is very slightly better than no-gram joint and seg-label only.
-Segmentaion result of no-gram joint is same as seg-label only.
-Pos tagging result of 3-gram is very slightly better than no-gram.
+On this dataset, segmentation result of 3-gram joint is very slightly better than no-gram joint and seg-label only.  
+Segmentaion result of no-gram joint is same as seg-label only.  
+Pos tagging result of 3-gram is very slightly better than no-gram.  
 Need more other dataset experiments to get conclusion.
 
 
@@ -154,8 +154,8 @@ Need more other dataset experiments to get conclusion.
 
 
 ```
-input -> CNC为由国家语委公布的语料库。
-result -> CNC/ws 为/p 由/p 国家/n 语委/j 公布/v 的/u 语料库/n 。/w
+input -> CNC是由国家语委公布的语料库。
+result -> CNC/ws 是/vl 由/p 国家/n 语委/j 公布/v 的/u 语料库/n 。/w
 
 input -> 这几天，西安的气温一直飙升，很多人都盼望一场雨的到来。
 result -> 这/r 几/m 天/nt ，/w 西安/ns 的/u 气温/n 一直/d 飙升/v ，/w 很多/a 人/n 都/d 盼望/v 一/m 场/q 雨/n 的/u 到来/v 。/w
