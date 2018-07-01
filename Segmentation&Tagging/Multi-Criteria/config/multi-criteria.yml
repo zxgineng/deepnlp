@@ -1,0 +1,29 @@
+data:
+  dataset_path: '~/data/dataset/nlp/seg-tag/multi-txt/'
+  processed_path: '~/data/processed-data/nlp/seg-tag/multi-criteria/multi/'
+
+  train_data: ['pku_training.utf8','msr_training.utf8','ctb_train.seg']
+  test_data: ['pku_test_gold.utf8','msr_test_gold.utf8','ctb_test.seg']
+
+  vocab_file: 'vocab.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
+
+model:
+  lstm_unit: 100
+  fc_unit: 4
+  dropout_keep_prob: 0.8
+  embedding_size: 100
+
+train:
+  batch_size: 20
+  max_gradient_norm: 5.0
+
+  learning_rate: 0.01
+  learning_decay_rate: 0.8
+
+  epoch: 0
+  max_epoch: 10
+
+  model_dir: '~/data/logs/nlp/seg-tag/multi-criteria/multi/'
+  save_checkpoints_steps: 2000

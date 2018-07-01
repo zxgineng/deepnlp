@@ -24,7 +24,7 @@ class ConfigMeta(type):
         def parse_description_then_remove(self, path):
             self.description = {}
             config = ""
-            with open(path, 'r') as infile:
+            with open(path, 'r', encoding='utf8') as infile:
                 for line in infile.readlines():
                     config += line
             return config
@@ -51,7 +51,8 @@ class ConfigMeta(type):
             if self.config is None:
                 raise FileNotFoundError("No such files start filename")
             else:
-                return f"Read config file name: {self.read_fname}\n" + json.dumps(self.config, indent=4)
+                return f"Read config file name: {self.read_fname}\n" + json.dumps(self.config, ensure_ascii=False,
+                                                                                  indent=4)
 
         def _set_config(self):
             if self.config is None:

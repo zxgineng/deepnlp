@@ -1,0 +1,31 @@
+data:
+  dataset_path: '~/data/dataset/nlp/seg-tag/cnc/'
+  processed_path: '~/data/processed-data/nlp/seg-tag/joint-seg-tag/joint/'
+
+  train_data: 'train.txt'
+  test_data: 'test.txt'
+
+  vocab_file: 'vocab.txt'
+  tag_file: 'tag.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
+
+model:
+  gru_unit: 200
+  fc_unit: 132
+  dropout_keep_prob: 0.5
+  embedding_size: 100
+  ngram: True # 3-gram rep inputs to gru or not
+
+train:
+  batch_size: 10
+  max_gradient_norm: 5.0
+
+  initial_lr: 0.1
+  decay_rate: 0.15
+
+  epoch: 0
+  max_epoch: 10
+
+  model_dir: '~/data/logs/nlp/seg-tag/joint-seg-tag/tag-ngram'
+  save_checkpoints_steps: 2000
