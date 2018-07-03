@@ -1,8 +1,8 @@
-from utils import Config
 import tensorflow as tf
 from tensorflow.contrib import slim
 
 from data_loader import load_pretrained_vec
+from utils import Config
 
 
 class Graph:

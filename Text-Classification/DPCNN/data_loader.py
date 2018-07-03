@@ -227,6 +227,7 @@ def create_tfrecord():
         file = os.path.join(Config.data.processed_path, data)
         with open(file, encoding='utf8') as f:
             dataset_files = f.read().split()
+            dataset_files = np.random.permutation(dataset_files)    # totally shuffled
 
         fidx = 0
         total_i = 0
@@ -249,6 +250,7 @@ def create_tfrecord():
                         sys.stdout.flush()
                         word_id = word2id(sentences[i], vocab)
                         label_id = label2id(labels[i], tag)
+
                         example = convert_to_example(word_id, label_id)
                         serialized = example.SerializeToString()
                         tfrecord_writer.write(serialized)
@@ -259,6 +261,7 @@ def create_tfrecord():
                             break
                     fidx += 1
                 print('\n%s complete' % tf_file)
+
 
 
 if __name__ == '__main__':

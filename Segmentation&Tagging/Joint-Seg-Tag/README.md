@@ -3,7 +3,7 @@
 TensorFlow implementation of [Character-based Joint Segmentation and POS Tagging for Chinese
 using Bidirectional RNN-CRF](https://arxiv.org/pdf/1704.01314.pdf). (2017. 4)
 
-![images](images/architecture.png)
+![images](images/paper.png)
 
 ## Requirements
 
@@ -95,10 +95,11 @@ python predict.py
 
 ## Experiments
 
-Simplify training process of paper   
+Simplified training process of paper   
 No fine tuning  
 Run all evaluation on the test data
 
+Dataset: CNC 
 
 **joint seg and tag with 3-gram rep inputs**
 
@@ -143,7 +144,7 @@ Run all evaluation on the test data
 |**best F**: 0.9514 **best P**: 0.9541 **best R**: 0.9493 |
 |![images](images/seg-score.png)|
 
-Dataset: CNC  
+ 
 On this dataset, segmentation result of 3-gram joint is very slightly better than no-gram joint and seg-label only.  
 Segmentaion result of no-gram joint is same as seg-label only.  
 Pos tagging result of 3-gram is very slightly better than no-gram.  

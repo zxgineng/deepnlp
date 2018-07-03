@@ -40,7 +40,7 @@ def get_tfrecord(name):
     files = os.listdir(os.path.join(Config.data.processed_path, 'tfrecord/'))
     for file in files:
         if name in file and file.endswith('.tfrecord'):
-            tfrecords.append(os.path.join(Config.data.processed_path, file))
+            tfrecords.append(os.path.join(Config.data.processed_path, 'tfrecord/', file))
     if len(tfrecords) == 0:
         raise RuntimeError('TFrecord not found.')
 
@@ -163,7 +163,7 @@ def preprocess(serialized):
             'label_id': tf.FixedLenFeature([], tf.int64),
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
-        word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])[:Config.model.max_sequence_length]
+        word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])[:Config.data.max_sequence_length]
         label_id = parsed_example['label_id']
         return word_id, label_id
 
@@ -192,7 +192,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             else:
                 dataset = dataset.repeat(1)  # 1 Epoch
             dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([Config.model.max_sequence_length], []))
+            dataset = dataset.padded_batch(batch_size, ([Config.data.max_sequence_length], []))
 
             iterator = dataset.make_initializable_iterator()
             next_batch = iterator.get_next()
@@ -227,6 +227,7 @@ def create_tfrecord():
         file = os.path.join(Config.data.processed_path, data)
         with open(file, encoding='utf8') as f:
             dataset_files = f.read().split()
+            dataset_files = np.random.permutation(dataset_files)  # totally shuffled
 
         fidx = 0
         total_i = 0
@@ -249,6 +250,7 @@ def create_tfrecord():
                         sys.stdout.flush()
                         word_id = word2id(sentences[i], vocab)
                         label_id = label2id(labels[i], tag)
+
                         example = convert_to_example(word_id, label_id)
                         serialized = example.SerializeToString()
                         tfrecord_writer.write(serialized)

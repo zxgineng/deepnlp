@@ -20,11 +20,13 @@ def run(mode, run_config):
         train_input_fn, train_input_hook = data_loader.get_dataset_batch(train_data, buffer_size=5000,
                                                                          batch_size=Config.train.batch_size,
                                                                          scope="val")
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=1024,
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512,
                                                                      scope="val")
 
         while True:
-            print("epoch:", Config.train.epoch)
+            print('*' * 40)
+            print("epoch", Config.train.epoch + 1, 'start')
+            print('*' * 40)
 
             estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
             estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
@@ -36,7 +38,7 @@ def run(mode, run_config):
     elif mode == 'eval':
         val_data = data_loader.get_tfrecord('test')
 
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=1024,
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512,
                                                                      scope="val")
 
         estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])

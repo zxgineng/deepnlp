@@ -41,7 +41,7 @@ if __name__ == '__main__':
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     tf.logging.set_verbosity(tf.logging.ERROR)
 
-    Config('config/textcnn.yml')
+    Config('config/dpcnn.yml')
     Config.train.model_dir = os.path.expanduser(Config.train.model_dir)
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 

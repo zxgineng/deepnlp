@@ -40,7 +40,7 @@ class Model:
 
     def _build_loss(self, logits):
         with tf.variable_scope('loss'):
-            self.loss = tf.losses.sparse_softmax_cross_entropy(logits=logits,labels=self.targets,scope='loss')
+            self.loss = tf.losses.sparse_softmax_cross_entropy(logits=logits,labels=self.targets)
 
 
     def _build_train_op(self):

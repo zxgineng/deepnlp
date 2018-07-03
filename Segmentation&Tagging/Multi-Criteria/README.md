@@ -91,10 +91,11 @@ python predict.py
 
 ## Experiments
 
-Simplify training process of paper  
+Simplified training process of paper  
 No fine tuning  
 Run all evaluation on the test data
 
+Dataset: pku, msr, ctb6 
 
 **multi-criteria**
 
@@ -147,8 +148,6 @@ Run all evaluation on the test data
 | :----------:|
 |**best F**: 0.9343 **best P**: 0.9385 **best R**: 0.9328 |
 |![images](images/ctb-eval-score.png)|
-
-Dataset: pku, msr, ctb6  
 
 All scores in multi-criteria are better than single-criteria.  
 Conclude from experiments, multi-criteria does help segmentation results.
