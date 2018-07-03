@@ -1,8 +1,8 @@
-from utils import Config
 import tensorflow as tf
 from tensorflow.contrib import slim
 
-from data_loader import read_pretrained_wordvec
+from utils import Config
+from data_loader import load_pretrained_vec
 
 
 class Graph:
@@ -14,26 +14,31 @@ class Graph:
             self.is_training = False
 
     def build(self, inputs):
-        id = inputs['id']
+        word_id = inputs['word_id']
         length = inputs['length']
-        embeddings = self.embedding(id)
-        logits = self.build_lstm(embeddings, length)
+        net = self._embedding(word_id)
+        net = self._build_lstm(net, length)
+        logits = self._build_fc(net)
         return logits
 
-    def embedding(self, inputs):
-        _, wordvec = read_pretrained_wordvec(Config.data.wordvec_fname)
+    def _embedding(self, inputs):
+        wordvec = load_pretrained_vec()
         embedding = tf.get_variable('embedding', [wordvec.shape[0], wordvec.shape[1]],
-                                    initializer=tf.constant_initializer(wordvec, tf.float32), trainable=False)
+                                    initializer=tf.constant_initializer(wordvec, tf.float32))
         output = tf.nn.embedding_lookup(embedding, inputs)
-        output = slim.dropout(output, Config.model.dropout_keep_prob, is_training=self.is_training)
         return output
 
-    def build_lstm(self, inputs, length):
+    def _build_lstm(self, inputs, length):
         with tf.variable_scope('bilstm'):
             lstm_cell_fw = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer)
             lstm_cell_bw = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer)
             lstm_outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, inputs, length,
                                                                           dtype=tf.float32)
-            lstm_outputs = tf.concat(lstm_outputs, axis=-1)
-            outputs = slim.fully_connected(lstm_outputs, Config.model.fc_unit, activation_fn=None)
+            outputs = tf.concat(lstm_outputs, axis=-1)
+
             return outputs
+
+    def _build_fc(self, inputs):
+        net = slim.dropout(inputs, Config.model.dropout_keep_prob, is_training=self.is_training)
+        outputs = slim.fully_connected(net, Config.model.fc_unit, None)
+        return outputs
