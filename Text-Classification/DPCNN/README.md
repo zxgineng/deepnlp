@@ -120,7 +120,7 @@ Split to 790k train samples and 47k test samples
 |![images](images/conv-3-train-loss.png)|![images](images/conv-3-eval-loss.png)|![images](images/conv-3-accuracy.png)|
 
 7-conv-blocks is slightly better than 3-conv-blocks.  
-Trainning time of 100 batch of 7-conv-blocks is 26.5sec, while 3-conv-blocks is 25.0sec.  
+Training time of 100 batch of 7-conv-blocks is 26.5sec, while 3-conv-blocks is 25.0sec.  
 
 ## Example
 

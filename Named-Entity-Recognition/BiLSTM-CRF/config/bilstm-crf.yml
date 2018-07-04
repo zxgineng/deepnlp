@@ -2,8 +2,8 @@ data:
   dataset_path: '~/data/dataset/nlp/ner/'
   processed_path: '~/data/processed-data/nlp/ner/bilism-crf/'
 
-  train_data: 'train-files.txt'
-  test_data: 'test-files.txt'
+  train_data: 'train.txt'
+  test_data: 'test.txt'
 
   vocab_file: 'vocab.txt'
   tag_file: 'tag.txt'

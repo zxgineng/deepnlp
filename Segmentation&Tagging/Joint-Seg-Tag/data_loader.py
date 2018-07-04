@@ -51,6 +51,9 @@ def load_tag():
 
 
 def build_vocab():
+    if not os.path.exists(Config.data.processed_path):
+        os.makedirs(Config.data.processed_path)
+
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     vocab = set()
 

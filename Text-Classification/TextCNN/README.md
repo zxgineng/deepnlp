@@ -106,7 +106,7 @@ Split to 790k train samples and 47k test samples
 |![images](images/train-loss.png)|![images](images/eval-loss.png)|![images](images/accuracy.png)|
 
 30% error rate higher than 7-conv-blocks DPCNN  
-Trainning time of 100 batch is 2.3sec, significantly faster than DPCNN, which is 26.5sec  
+Training time of 100 batch is 2.3sec, significantly faster than DPCNN, which is 26.5sec  
 Converge really fast
 
 ## Example
