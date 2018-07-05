@@ -35,34 +35,36 @@ class PRFScoreHook(tf.train.SessionRunHook):
             la_start = 0
             pr_start = 0
 
-            la_t = la[0][2:]
-            pr_t = pr[0][2:]
+            la_t = la[0][2:] if la[0][0] in ['B', 'S'] else None
+            pr_t = pr[0][2:] if pr[0][0] in ['B', 'S'] else None
 
             for n in range(1, le):
 
                 if la[n][0] == 'B' or la[n][0] == 'S':
-                    if la_start:
+                    if la_t:
                         gold_seg.append((la_start, n, la_t))
                     la_start = n
                     la_t = la[n][2:]
 
                 elif la[n][0] == 'O':
-                    gold_seg.append((la_start, n, la_t))
-                    la_start = None
+                    if la_t:
+                        gold_seg.append((la_start, n, la_t))
+                    la_t = None
 
                 if pr[n][0] == 'B' or pr[n][0] == 'S':
-                    if pr_start:
+                    if pr_t:
                         pred_seg.append((pr_start, n, pr_t))
                     pr_start = n
                     pr_t = pr[n][2:]
 
                 elif pr[n][0] == 'O':
-                    pred_seg.append((pr_start, n, pr_t))
-                    pr_start = None
+                    if pr_t:
+                        pred_seg.append((pr_start, n, pr_t))
+                    pr_t = None
 
-            if la_start:
+            if la_t:
                 gold_seg.append((la_start, le, la_t))
-            if pr_start:
+            if pr_t:
                 pred_seg.append((pr_start, le, pr_t))
 
             self.gold_num += len(gold_seg)
