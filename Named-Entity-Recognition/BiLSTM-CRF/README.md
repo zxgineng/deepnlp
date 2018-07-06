@@ -14,97 +14,122 @@ TensorFlow implementation of [Neural Architectures for Named Entity Recognition]
 
 
     ├── config                  # Config files (.yml)
-    ├── data                    # dataset path
-    ├── logs                    # checkpoints
-    ├── architecture                # architecture graphs (from input to logits)
-        ├── __init__.py             # Graph logic
-    ├── data_loader.py          # raw_data -> precossed_data -> generate_batch (using Dataset)
-    ├── main.py                 # train
+    ├── network                 # define network
+    ├── data_loader.py          # raw_data -> tfrecord -> dataset
+    ├── main.py                 # train and eval
     ├── predict.py              # predict
     ├── utils.py                # config tools
+    ├── hooks.py                # train and eval hooks
     └── model.py                # define model, loss, optimizer
     
 
 ## Config
 
-example: ner.yml
+bilstm-crf.yml
 
 ```yml
 data:
-  base_path: 'data/'
-  raw_path: 'raw_data/'
-  processed_path: 'processed_data'
-  wordvec_fname: 'glove.txt'
-  tag_labels: ['身体部位', '治疗', '症状和体征', '检查和检验', '疾病和诊断']
+  dataset_path: '~/data/dataset/nlp/ner/'
+  processed_path: '~/data/processed-data/nlp/ner/bilism-crf/'
+
+  train_data: 'train.txt'
+  test_data: 'test.txt'
+
+  vocab_file: 'vocab.txt'
+  tag_file: 'tag.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
 
 model:
   lstm_unit: 100
-  fc_unit: 21
+  fc_unit: 13
   dropout_keep_prob: 0.5
-  embedding_size: 64
+  embedding_size: 100
 
 train:
-  batch_size: 16
+  batch_size: 20
   max_gradient_norm: 5.0
-  learning_rate: 0.001
-  learning_decay_steps: 500
-  learning_decay_rate: 0.8
-  optimizer: 'Adam'
-  max_steps: 5000
-  model_dir: 'logs/NER/bilstm-crf/'
 
-  save_checkpoints_steps: 500
-  check_hook_n_iter: 100
+  initial_lr: 0.01
 
-  debug: False
+  epoch: 0
+  max_epoch: 15
+
+  model_dir: '~/data/logs/nlp/ner/bilism-crf/'
+  save_checkpoints_steps: 2000
 ```
 
 
 ## Run
 
-Process raw data
+**Process raw data**
+
+Put data(.txt) in dataset_path  
+Data must follow the format of example data (I add prefix to every sentence coz I jointly train multi-corpus)   
+Put wordvec(.txt) in processed_path
 
 ```
-python data_loader.py --config config/ner.yml
+python data_loader.py
 ```
 
-Train
+**Train**
 
 ```
-python main.py --config config/ner.yml
+python main.py --mode train
 ```
 
-Predict  
+**Evaluate**
 
-[download pretrained model](https://drive.google.com/open?id=1OT_fQ7X5FpAotmJ2oDkpmvEaNusHNzov)  
-Since the model was trained on medical dataset, it can only recognize medical entity.
 ```
-python predict.py --config config/ner.yml
+python main.py --mode eval
 ```
 
-## Tensorboard
+**Predict**  
+```
+python predict.py
+```
+
+## Experiments
+
+Simplified training process of paper   
+No fine tuning  
+Run all evaluation on the test data
+
+Dataset: self-made   
+I combined several small datasets together, of which tagging standards are not consistent.  
+This makes a big **negative** impact on evaluation score.
 
 
-- ner.yml
+|train loss|eval loss|
+| :----------:| :----------: |
+|![images](images/train-loss.png)|![images](images/eval-loss.png)|
 
-![images](images/loss.png)
+|eval score|
+| :----------:|
+|**best F**: 0.8908 **best P**: 0.9005 **best R**: 0.8828 |
+|![images](images/score.png)|
 
 
 ## Example
 
+PER-人名 LOC-地点 ORG-组织
 
 ```
-input text > 现患者一般情况可，头顶部肿胀已消退，双肺呼吸音清晰，未闻及啰音，律齐，各瓣膜听诊区未闻及病理性杂音，腹平坦，软，全腹无压痛，无反跳痛及肌紧张，全腹未触及异常包块，左大腿轻度肿胀，压痛，表面可见淤青。神经系统查体未见异常。
-result:
-现患者一般情况可， {{头顶部(:身体部位)}}  {{肿胀(:症状和体征)}} 已消退， {{双肺(:身体部位)}}  {{呼吸音(:检查和检验)}} 清晰，未闻及 {{啰音(:检查和检验)}} ， {{律齐(:症状和体征)}} ， {{各瓣膜听诊区(:身体部位)}} 未闻及 {{病理性杂音(:检查和检验)}} ， {{腹(:身体部位)}} 平坦，软， {{全腹(:身体部位)}} 无 {{压痛(:检查和检验)}} ，无 {{反跳痛(:检查和检验)}} 及 {{肌紧张(:检查和检验)}} ， {{全腹(:身体部位)}} 未触及异常 {{包块(:症状和体征)}} ， {{左大腿(:身体部位)}} 轻度 {{肿胀(:症状和体征)}} ， {{压痛(:检查和检验)}} ，表面可见淤青。神经系统 {{查体(:检查和检验)}} 未见异常。
+input -> 法国队主教练德尚带领球员进行训练。当日，法国队在俄罗斯下诺夫哥罗德训练，备战与乌拉圭队的足球赛。
+result -> [法国队]ORG 主教练 [德尚]PER 带领球员进行训练。当日， [法国队]ORG 在 [俄罗斯]LOC  [下诺夫哥罗德]LOC 训练，备战与 [乌拉圭队]ORG 的足球赛。
 
-input text > 患者精神状况可，无发热，诉头晕明显减轻。饮食及二便正常。查：肺心腹未见异常。头颅无畸形，局部压痛明显减轻，左下颌皮肤破损已结痂。右腹股沟无明显肿胀，压痛明显减轻。右膝部挫伤已结痂，肿胀消退，右膝关节活动可。足背动脉搏动良好，足趾感觉及运动正常。神经系统查体未见异常。
-result:
-患者精神状况可，无 {{发热(:症状和体征)}} ，诉 {{头晕(:症状和体征)}} 明显减轻。饮食及 {{二便(:身体部位)}} 正常。查： {{肺(:身体部位)}}  {{心(:身体部位)}}  {{腹(:身体部位)}} 未见异常。 {{头颅(:身体部位)}} 无 {{畸形(:症状和体征)}} ，局部 {{压痛(:检查和检验)}} 明显减轻， {{左下颌皮肤(:身体部位)}} 破损已结痂。 {{右腹股沟(:身体部位)}} 无明显 {{肿胀(:症状和体征)}} ， {{压痛(:检查和检验)}} 明显减轻。 {{右膝部(:身体部位)}} 挫伤已结痂， {{肿胀(:症状和体征)}} 消退， {{右膝关节(:身体部位)}} 活动可。 {{足背动脉(:身体部位)}} 搏动良好， {{足趾(:身体部位)}} 感觉及运动正常。神经系统 {{查体(:检查和检验)}} 未见异常。
+input -> 苹果公司已经通知英特尔,它将不会在其2020年的产品系列中使用英特尔的5G调制解调器。
+result -> [苹果公司]ORG 已经通知 [英特尔]ORG ,它将不会在其2020年的产品系列中使用 [英特尔]ORG 的5G调制解调器。
 
-input text > 女，6岁，河北省承德市双滦区偏桥子镇杨泉子村5组人，主因"咳嗽、咳痰月余，加重伴发热1天"于2016年12月12日12:58以肺炎收入院。
-result:
-女，6岁，河北省承德市双滦区偏桥子镇杨泉子村5组人，主因" {{咳嗽(:症状和体征)}} 、 {{咳痰(:症状和体征)}} 月余，加重伴 {{发热(:症状和体征)}} 1天"于2016年12月12日12:58以 {{肺炎(:疾病和诊断)}} 收入院。
+input -> 在多次指责德国没有提升其国防开支，来为北约“提供足够多的贡献”后，特朗普近日更是直接点出了德国总理默克尔的名字，抨击其有钱从俄罗斯购买石油和天然气，却没有为北约拿出足够多的“份子钱”。
+result -> 在多次指责 [德国]LOC 没有提升其国防开支，来为 [北约]ORG “提供足够多的贡献”后， [特朗普]PER 近日更是直接点出了 [德国]LOC 总理 [默克尔]PER 的名字，抨击其有钱从 [俄罗斯]LOC 购买石油和天然气，却没有为 [北约]ORG 拿出足够多的“份子钱”。
+
+input -> 俄罗斯总统普京在克里姆林宫接受了中国中央广播电视总台台长慎海雄的独家专访。
+result -> [俄罗斯]LOC 总统 [普京]PER 在 [克里姆林宫]LOC 接受了 [中国中央广播电视总台]ORG 台长 [慎海雄]PER 的独家专访。
+
+input -> 伊朗法尔斯通讯社6月28日报道称，叙利亚军队在代尔祖尔省东南部的战斗中全面清除了“伊斯兰国”极端组织在巴迪耶（沙漠）的恐怖分子残余。
+result ->  [伊朗法尔斯通讯社]ORG 6月28日报道称， [叙利亚]LOC 军队在 [代尔祖尔省]LOC 东南部的战斗中全面清除了“伊斯兰国”极端组织在 [巴迪耶]LOC （沙漠）的恐怖分子残余。
+
 ```
 
 

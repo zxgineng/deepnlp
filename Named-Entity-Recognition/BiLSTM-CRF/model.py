@@ -57,10 +57,13 @@ class Model:
     def _build_train_op(self):
         global_step = tf.train.get_global_step()
 
-        learning_rate = Config.train.initial_lr
+        if Config.train.epoch <= 10:
+            learning_rate = Config.train.initial_lr
+        else:
+            learning_rate = Config.train.initial_lr * 0.1
 
         self.train_op = slim.optimize_loss(
             self.loss, global_step,
-            optimizer=tf.train.GradientDescentOptimizer(learning_rate),
+            optimizer=tf.train.MomentumOptimizer(learning_rate,0.9),
             learning_rate=learning_rate,
             clip_gradients=Config.train.max_gradient_norm)

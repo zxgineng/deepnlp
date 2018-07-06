@@ -6,7 +6,6 @@ from utils import Config
 from model import Model
 import data_loader
 
-Config('config/multi-criteria.yml')
 id2label = {0: 'B', 1: 'M', 2: 'E', 3: 'S'}
 
 
@@ -44,6 +43,10 @@ if __name__ == '__main__':
 
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     tf.logging.set_verbosity(tf.logging.ERROR)
+
+    Config('config/multi-criteria.yml')
+    Config.train.model_dir = os.path.expanduser(Config.train.model_dir)
+    Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
     p = Predictor()
     while True:

@@ -111,6 +111,22 @@ def read_text(file):
                 sentence.append(word)
                 labels.append(label)
             else:
+                if set(labels) == {'O'}:
+                    continue
+                # balance pos and neg data
+                new_sentence = []
+                new_labels = []
+                if ',' in sentence:
+                    idx = [0] + [i + 1 for i, s in enumerate(sentence) if s == ','] + [len(sentence)]
+                    for i in range(len(idx) - 1):
+                        if set(labels[idx[i]:idx[i + 1]]) != {'O'}:
+                            new_sentence.extend(sentence[idx[i]:idx[i + 1]])
+                            new_labels.extend(labels[idx[i]:idx[i + 1]])
+                    if new_sentence[-1] == ',':
+                        new_sentence[-1] = '。'
+                    sentence = new_sentence
+                    labels = new_labels
+
                 total_sentences.append(sentence)
                 total_labels.append(labels)
                 sentence = []

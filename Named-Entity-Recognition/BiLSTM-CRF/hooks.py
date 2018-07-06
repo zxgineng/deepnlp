@@ -32,13 +32,13 @@ class PRFScoreHook(tf.train.SessionRunHook):
 
             gold_seg = []
             pred_seg = []
-            la_start = 0
-            pr_start = 0
+            la_start = 3
+            pr_start = 3
 
-            la_t = la[0][2:] if la[0][0] in ['B', 'S'] else None
-            pr_t = pr[0][2:] if pr[0][0] in ['B', 'S'] else None
+            la_t = la[3][2:] if la[3][0] in ['B', 'S'] else None
+            pr_t = pr[3][2:] if pr[3][0] in ['B', 'S'] else None
 
-            for n in range(1, le):
+            for n in range(4, le):
 
                 if la[n][0] == 'B' or la[n][0] == 'S':
                     if la_t:
