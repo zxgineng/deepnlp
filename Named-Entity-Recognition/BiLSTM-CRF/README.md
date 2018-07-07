@@ -30,7 +30,7 @@ bilstm-crf.yml
 ```yml
 data:
   dataset_path: '~/data/dataset/nlp/ner/'
-  processed_path: '~/data/processed-data/nlp/ner/bilism-crf/'
+  processed_path: '~/data/processed-data/nlp/ner/bilstm-crf/'
 
   train_data: 'train.txt'
   test_data: 'test.txt'
@@ -55,7 +55,7 @@ train:
   epoch: 0
   max_epoch: 15
 
-  model_dir: '~/data/logs/nlp/ner/bilism-crf/'
+  model_dir: '~/data/logs/nlp/ner/bilstm-crf/'
   save_checkpoints_steps: 2000
 ```
 
@@ -65,7 +65,7 @@ train:
 **Process raw data**
 
 Put data(.txt) in dataset_path  
-Data must follow the format of example data (I add prefix to every sentence coz I jointly train multi-corpus)   
+Data must follow the format of example data (I add prefix to every sentence coz I jointly trained multi-corpus)   
 Put wordvec(.txt) in processed_path
 
 ```
@@ -96,8 +96,8 @@ No fine tuning
 Run all evaluation on the test data
 
 Dataset: self-made   
-I combined several small datasets together, of which tagging standards are not consistent.  
-This makes a big **negative** impact on evaluation score.
+I combined several small datasets together, of which tagging standards are inconsistent.  
+This makes a **negative** impact on evaluation score.
 
 
 |train loss|eval loss|

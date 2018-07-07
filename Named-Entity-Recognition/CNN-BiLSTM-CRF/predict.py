@@ -12,6 +12,7 @@ class Predictor:
         self.estimator = self._make_estimator()
         self.vocab = data_loader.load_vocab()
         self.tag = data_loader.load_tag()
+        self.char2image = data_loader.load_char2image()
 
     def _make_estimator(self):
         run_config = tf.estimator.RunConfig(model_dir=Config.train.model_dir)
@@ -27,10 +28,12 @@ class Predictor:
             text = [text]
         length = np.array([len(t) for t in text])
         word_id = [data_loader.word2id(list(t), self.vocab) for t in text]
+        char_images = [data_loader.word2image(list(t), self.char2image) for t in text]
         word_id = tf.keras.preprocessing.sequence.pad_sequences(word_id, dtype='int64', padding='post')
-
+        char_images = tf.keras.preprocessing.sequence.pad_sequences(char_images, dtype='float32', padding='post')
+        char_images = (char_images / 255 - 0.5) * 2
         predict_input_fn = tf.estimator.inputs.numpy_input_fn(
-            x={"word_id": word_id, 'length': length},
+            x={"word_id": word_id, 'char_image': char_images, 'length': length},
             batch_size=512,
             num_epochs=1,
             shuffle=False)
@@ -43,7 +46,7 @@ if __name__ == '__main__':
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     tf.logging.set_verbosity(tf.logging.ERROR)
 
-    Config('config/bilstm-crf.yml')
+    Config('config/cnn-bilstm-crf.yml')
     Config.train.model_dir = os.path.expanduser(Config.train.model_dir)
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
