@@ -1,0 +1,36 @@
+data:
+  dataset_path: '~/data/dataset/nlp/dependency-parsing/'
+  processed_path: '~/data/processed-data/nlp/dependency-parsing/biaffine/'
+
+  train_data: 'train.conll'
+  test_data: 'test.conll'
+
+  vocab_file: 'vocab.txt'
+  pos_file: 'pos.txt'
+  dep_file: 'dep.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
+
+model:
+  lstm_size: 400
+  arc_mlp_size: 500
+  label_mlp_size: 100
+  lstm_keep_prob: 0.67
+  arc_keep_prob: 0.67
+  label_keep_prob: 0.67
+  embedding_keep_prob: 0.67
+  word_embedding_size: 300
+  pos_embedding_size: 100
+  label_num: 39
+
+train:
+  batch_size: 20
+  max_gradient_norm: 5.0
+
+  initial_lr: 0.01
+
+  epoch: 0
+  max_epoch: 15
+
+  model_dir: '~/data/logs/nlp/dependency-parsing/biaffine/'
+  save_checkpoints_steps: 2000
