@@ -5,7 +5,6 @@ import os
 import data_loader
 from model import Model
 from utils import Config
-from hooks import PRFScoreHook
 
 
 def run(mode, run_config):
@@ -29,7 +28,7 @@ def run(mode, run_config):
             print('*' * 40)
 
             estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
-            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook, PRFScoreHook()])
+            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
@@ -38,7 +37,7 @@ def run(mode, run_config):
     elif mode == 'eval':
         val_data = data_loader.get_tfrecord('test')
         val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val")
-        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook, PRFScoreHook()])
+        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
 
 def main(mode):
@@ -58,7 +57,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'eval'],
                         help='Mode (train)')
-    parser.add_argument('--config', type=str, default='config/bilstm-crf.yml', help='config file name')
+    parser.add_argument('--config', type=str, default='config/biaffine.yml', help='config file name')
 
     args = parser.parse_args()
 

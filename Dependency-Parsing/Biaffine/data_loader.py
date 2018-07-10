@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
-from utils import Config
+from utils import Config, strQ2B
 
 
 def _int64_feature(value):
@@ -31,35 +31,35 @@ def build_and_read_train(file):
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     pos_file = os.path.join(Config.data.processed_path, Config.data.pos_file)
     dep_file = os.path.join(Config.data.processed_path, Config.data.dep_file)
-    vocab = set()
-    pos_tag = set()
-    dep_tag = set()
-    total_sen = []
-    total_pos = []
-    total_arc = []
-    total_dep = []
-    sen = []
-    pos = []
-    arc = []
-    dep = []
+    vocab, pos_tag, dep_tag = set(), set(), set()
+    Config.data.wp_pair = dict()
+    total_sen, total_pos, total_arc, total_dep = [], [], [], []
+    sen, pos, arc, dep = [], [], [], []
+
     with open(file, encoding='utf8') as f:
         for line in f:
             line = line.strip()
             if line:
-                _, w, _, _, p, _, a, d = line.split()
+                line = strQ2B(line)
+                w, p, a, d = line.split()
                 vocab.add(w)
                 pos_tag.add(p)
                 dep_tag.add(d)
+                if w not in Config.data.wp_pair:
+                    Config.data.wp_pair[w] = p
+                else:
+                    Config.data.wp_pair[w] = None
 
                 sen.append(w)
                 pos.append(p)
-                arc.append(a)
+                arc.append(int(a))
                 dep.append(d)
             else:
                 total_sen.append(sen)
                 total_pos.append(pos)
                 total_arc.append(arc)
                 total_dep.append(dep)
+                sen, pos, arc, dep = [], [], [], []
 
     with open(vocab_file, 'w', encoding='utf8') as f:
         f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(vocab)))
@@ -67,42 +67,47 @@ def build_and_read_train(file):
         f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(pos_tag)))
     with open(dep_file, 'w', encoding='utf8') as f:
         f.write('\n'.join(sorted(dep_tag)))
+
     return total_sen, total_pos, total_arc, total_dep
 
 
-# def build_tag():
-#     seg_tag = ['B', 'I', 'E', 'S']
-#     ner_tag = ['PER', 'LOC', 'ORG']
-#     tag = [s + '-' + n for s in seg_tag for n in ner_tag] + ['O']
-#     tag_file = os.path.join(Config.data.processed_path, Config.data.tag_file)
-#     with open(tag_file, 'w', encoding='utf8') as f:
-#         f.write('\n'.join(tag))
-#
-#
-def load_tag():
-    tag_file = os.path.join(Config.data.processed_path, Config.data.tag_file)
+def read_test(file):
+    total_sen, total_pos, total_arc, total_dep = [], [], [], []
+    sen, pos, arc, dep = [], [], [], []
+    with open(file, encoding='utf8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                line = strQ2B(line)
+                w, p, a, d = line.split()
+                sen.append(w)
+                pos.append(p)
+                arc.append(int(a))
+                dep.append(d)
+            else:
+                total_sen.append(sen)
+                total_pos.append(pos)
+                total_arc.append(arc)
+                total_dep.append(dep)
+                sen, pos, arc, dep = [], [], [], []
+
+    return total_sen, total_pos, total_arc, total_dep
+
+
+def load_pos():
+    tag_file = os.path.join(Config.data.processed_path, Config.data.pos_file)
     with open(tag_file, encoding='utf8') as f:
         tag = f.read().splitlines()
     return {t: i for i, t in enumerate(tag)}
 
 
-#
-#
-# def build_vocab():
-#     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
-#     vocab = set()
-#
-#     file = os.path.join(Config.data.dataset_path, Config.data.train_data)
-#     co = re.compile('\t[A-Z]-?[A-Z]*')
-#     with open(file, encoding='utf8') as f:
-#         content = re.sub(co, ' ', f.read())
-#         content = ''.join(content.split())
-#         vocab.update(content)
-#
-#     with open(vocab_file, 'w', encoding='utf8') as f:
-#         f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(list(vocab))))
-#
-#
+def load_dep():
+    tag_file = os.path.join(Config.data.processed_path, Config.data.dep_file)
+    with open(tag_file, encoding='utf8') as f:
+        tag = f.read().splitlines()
+    return {t: i for i, t in enumerate(tag)}
+
+
 def load_vocab():
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     with open(vocab_file, encoding='utf8') as f:
@@ -119,7 +124,7 @@ def build_wordvec_pkl():
     with open(file, encoding='utf8') as f:
         wordvec_dict = {}
         print('It may take some time to load wordvec file ...')
-        for i,line in enumerate(f):
+        for i, line in enumerate(f):
             if len(line.split()) < Config.model.word_embedding_size + 1:
                 continue
             word = line.strip().split(' ')[0]
@@ -128,14 +133,10 @@ def build_wordvec_pkl():
                 wordvec_dict[word] = vec
 
     for index, word in enumerate(vocab):
-        sys.stdout.write('\r>> building wordvec %d/%d' % (index + 1, vocab_size))
-        sys.stdout.flush()
         if word in wordvec_dict:
             wordvec[index] = wordvec_dict[word]
         else:
             wordvec[index] = np.random.rand(Config.model.word_embedding_size)
-            print(word)
-    print()
 
     with open(os.path.join(Config.data.processed_path, Config.data.wordvec_pkl), 'wb') as f:
         pickle.dump(wordvec, f)
@@ -148,62 +149,33 @@ def load_pretrained_vec():
     return wordvec
 
 
-# def read_text(file):
-#     total_sentences, total_labels = [], []
-#     sentence = []
-#     labels = []
-#     with open(file, encoding='utf8') as f:
-#         for line in f:
-#             line = line.strip()
-#             if line:
-#                 word, label = line.split()
-#                 sentence.append(word)
-#                 labels.append(label)
-#             else:
-#                 if set(labels) == {'O'}:
-#                     continue
-#                 # balance pos and neg data
-#                 new_sentence = []
-#                 new_labels = []
-#                 if ',' in sentence:
-#                     idx = [0] + [i + 1 for i, s in enumerate(sentence) if s == ','] + [len(sentence)]
-#                     for i in range(len(idx) - 1):
-#                         if set(labels[idx[i]:idx[i + 1]]) != {'O'}:
-#                             new_sentence.extend(sentence[idx[i]:idx[i + 1]])
-#                             new_labels.extend(labels[idx[i]:idx[i + 1]])
-#                     if new_sentence[-1] == ',':
-#                         new_sentence[-1] = '。'
-#                     sentence = new_sentence
-#                     labels = new_labels
-#
-#                 total_sentences.append(sentence)
-#                 total_labels.append(labels)
-#                 sentence = []
-#                 labels = []
-#
-#     return total_sentences, total_labels
-
-
 def word2id(words, vocab):
     word_id = [vocab.get(word, vocab['<UNK>']) for word in words]
     return word_id
 
 
-def label2id(labels, tag):
-    label_id = [tag[label] for label in labels]
-    return label_id
+def pos2id(pos, dict):
+    pos_id = [dict[p] for p in pos]
+    return pos_id
 
 
-def id2label(id, tag):
-    id2label = {i: t for i, t in enumerate(tag)}
-    return [id2label[i] for i in id]
+def dep2id(dep, dict):
+    dep_id = [dict[d] for d in dep]
+    return dep_id
 
 
-def convert_to_example(word_id, label_id):
+# def id2label(id, tag):
+#     id2label = {i: t for i, t in enumerate(tag)}
+#     return [id2label[i] for i in id]
+
+
+def convert_to_example(word_id, pos_id, arc, dep_id):
     """convert one sample to example"""
     data = {
         'word_id': _int64_feature(word_id),
-        'label_id': _int64_feature(label_id),
+        'pos_id': _int64_feature(pos_id),
+        'arc': _int64_feature(arc),
+        'dep_id': _int64_feature(dep_id),
         'length': _int64_feature(len(word_id))
     }
     features = tf.train.Features(feature=data)
@@ -215,14 +187,18 @@ def preprocess(serialized):
     def parse_tfrecord(serialized):
         features = {
             'word_id': tf.VarLenFeature(tf.int64),
-            'label_id': tf.VarLenFeature(tf.int64),
+            'pos_id': tf.VarLenFeature(tf.int64),
+            'arc': tf.VarLenFeature(tf.int64),
+            'dep_id': tf.VarLenFeature(tf.int64),
             'length': tf.FixedLenFeature([], tf.int64)
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])
-        label_id = tf.sparse_tensor_to_dense(parsed_example['label_id'])
+        pos_id = tf.sparse_tensor_to_dense(parsed_example['pos_id'])
+        arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
+        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
         length = parsed_example['length']
-        return word_id, label_id, length
+        return word_id, pos_id, arc, dep_id, length
 
     return parse_tfrecord(serialized)
 
@@ -249,64 +225,68 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             else:
                 dataset = dataset.repeat(1)  # 1 Epoch
             dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], []))
-
+            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], []))
             iterator = dataset.make_initializable_iterator()
             next_batch = iterator.get_next()
             word_id = next_batch[0]
-            label_id = next_batch[1]
-            length = next_batch[2]
+            pos_id = next_batch[1]
+            arc = next_batch[2]
+            dep_id = next_batch[3]
+            length = next_batch[4]
 
             iterator_initializer_hook.iterator_initializer_func = \
                 lambda sess: sess.run(
                     iterator.initializer,
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
-            return {'word_id': word_id, 'length': length}, label_id
+            return {'word_id': word_id, 'pos_id': pos_id, 'length': length}, {'arc': arc, 'dep_id': dep_id}
 
     return inputs, iterator_initializer_hook
 
 
 def create_tfrecord():
-    train_data = os.path.join(Config.data.dataset_path, Config.data.train_data)
-    train_sen, train_pos, train_arc, train_dep = build_and_read_train(train_data)
-    exit()
+    train_file = os.path.join(Config.data.dataset_path, Config.data.train_data)
+    train_data = build_and_read_train(train_file)
+    test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
+    test_data = read_test(test_file)
     build_wordvec_pkl()
-
     vocab = load_vocab()
-    tag = load_tag()
+    pos_dict = load_pos()
+    dep_dict = load_dep()
 
-    if len(tag) != Config.model.fc_unit:
-        raise ValueError('length of tag dict must be as same as fc_unit')
+    if len(pos_dict) != Config.model.pos_num:
+        raise ValueError('length of pos dict must be as same as pos_num')
+    if len(dep_dict) != Config.model.dep_num:
+        raise ValueError('length of dep dict must be as same as dep_num')
 
     if not os.path.exists(os.path.join(Config.data.processed_path, 'tfrecord')):
         os.makedirs(os.path.join(Config.data.processed_path, 'tfrecord'))
 
     print('writing to tfrecord ...')
-    for data in [Config.data.train_data, Config.data.test_data]:
-        dataset_file = os.path.join(Config.data.dataset_path, data)
-        sentences, labels = read_text(dataset_file)
+    for data in [train_data, test_data]:
+        sen, pos, arc, dep = data
         i = 0
         fidx = 0
-        while i < len(sentences):
-            if data in Config.data.train_data:
+        while i < len(sen):
+            if data == train_data:
                 tf_file = 'train_%d.tfrecord' % fidx
             else:
                 tf_file = 'test.tfrecord'
             tf_file = os.path.join(Config.data.processed_path, 'tfrecord', tf_file)
             with tf.python_io.TFRecordWriter(tf_file) as tfrecord_writer:
                 j = 0
-                while i < len(sentences):
-                    sys.stdout.write('\r>> converting %s %d/%d' % (data, i + 1, len(sentences)))
+                while i < len(sen):
+                    sys.stdout.write('\r>> converting %d/%d' % (i + 1, len(sen)))
                     sys.stdout.flush()
-                    word_id = word2id(sentences[i], vocab)
-                    label_id = label2id(labels[i], tag)
-                    example = convert_to_example(word_id, label_id)
+                    word_id = word2id(sen[i], vocab)
+                    pos_id = pos2id(pos[i], pos_dict)
+                    dep_id = dep2id(dep[i], dep_dict)
+                    example = convert_to_example(word_id, pos_id, arc[i], dep_id)
                     serialized = example.SerializeToString()
                     tfrecord_writer.write(serialized)
                     i += 1
                     j += 1
-                    if j >= 5000 and data in Config.data.train_data:  # totally shuffled
+                    if j >= 5000 and data == train_data:  # totally shuffled
                         break
                 fidx += 1
             print('\n%s complete' % tf_file)

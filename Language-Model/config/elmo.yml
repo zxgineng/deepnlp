@@ -1,0 +1,38 @@
+data:
+  dataset_path: '~/data/dataset/nlp/ner/'
+  processed_path: '~/data/processed-data/nlp/ner/bilism-crf/'
+
+  train_data: 'train-files.txt'
+  test_data: 'test-files.txt'
+
+  vocab_file: 'vocab.txt'
+  tag_file: 'tag.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
+
+
+
+model:
+  char_image_size: 32
+  highway_layer_num: 2
+  lstm_layer_num: 2
+  lstm_unit: 2048
+  fc_unit: 21
+  dropout_keep_prob: 0.9
+  embedding_size: 300
+  lstm_cell_clip: 3.0
+  lstm_proj_clip: 3.0
+  seq_length: 20
+  vocab_num: 20905
+
+train:
+  batch_size: 30
+  max_gradient_norm: 5.0
+  sampled_num: 3000
+  initial_lr: 0.1
+
+  epoch: 0
+  max_epoch: 10
+
+  model_dir: '~/data/logs/nlp/ner/bilism-crf/'
+  save_checkpoints_steps: 2000

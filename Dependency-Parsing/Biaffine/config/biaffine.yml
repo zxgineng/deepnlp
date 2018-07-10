@@ -21,16 +21,17 @@ model:
   embedding_keep_prob: 0.67
   word_embedding_size: 300
   pos_embedding_size: 100
-  label_num: 39
+  pos_num: 26
+  dep_num: 69
 
 train:
   batch_size: 20
   max_gradient_norm: 5.0
 
-  initial_lr: 0.01
+  initial_lr: 0.002
 
   epoch: 0
-  max_epoch: 15
+  max_epoch: 10
 
   model_dir: '~/data/logs/nlp/dependency-parsing/biaffine/'
   save_checkpoints_steps: 2000

@@ -13,7 +13,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions,self.metrics = None, None, None,None
+        self.loss, self.train_op, self.predictions, self.metrics = None, None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -31,6 +31,11 @@ class Model:
         graph = Graph(self.mode)
         arc_logits, label_logits = graph.build(self.inputs)
 
+        arc_pred = tf.argmax(arc_logits, -1)
+        arc_mask = tf.one_hot(arc_pred, arc_pred.shape[-1], True, False,
+                              dtype=tf.bool)
+        label_pred = tf.argmax(tf.boolean_mask(label_logits, arc_mask), -1)
+        self.predictions = {'arc': arc_pred, 'label': label_pred}
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(arc_logits, label_logits)
@@ -38,22 +43,32 @@ class Model:
             self._build_metric()
 
     def _build_loss(self, arc_logits, label_logits):
-        mask = tf.sequence_mask(self.inputs['length'],dtype=tf.float32)
+        weights = tf.sequence_mask(self.inputs['length'], dtype=tf.float32)
+        arc_loss = tf.losses.sparse_softmax_cross_entropy(self.targets['arc'], arc_logits, weights)
 
+        arc_mask = tf.one_hot(self.targets['arc'], self.targets['arc'].shape[-1], True, False,
+                              dtype=tf.bool)  # [b,s] -> [b,s,s]
+        label_logits = tf.boolean_mask(label_logits, arc_mask)  # [b,s,s,c] -> [b*s,c]
+        weights = tf.reshape(weights, -1)
+        label_loss = tf.losses.sparse_softmax_cross_entropy(tf.reshape(self.targets['dep_id'], [-1]), label_logits,
+                                                            weights)
 
-
-
+        self.loss = arc_loss + label_loss
 
     def _build_train_op(self):
         global_step = tf.train.get_global_step()
-
-        if Config.train.epoch <= 10:
-            learning_rate = Config.train.initial_lr
-        else:
-            learning_rate = Config.train.initial_lr * 0.1
+        learning_rate = Config.train.initial_lr * tf.pow(0.75, global_step / 5000)
 
         self.train_op = slim.optimize_loss(
             self.loss, global_step,
-            optimizer=tf.train.MomentumOptimizer(learning_rate,0.9),
+            optimizer=tf.train.AdamOptimizer(learning_rate, beta1=0.9, beta2=0.9),
             learning_rate=learning_rate,
             clip_gradients=Config.train.max_gradient_norm)
+
+    def _build_metric(self):
+        weights = tf.sequence_mask(self.inputs['length'], dtype=tf.float32)
+        self.metrics = {
+            "UAS": tf.metrics.accuracy(self.targets['arc'], self.predictions['arc'], weights),
+            'LAS': tf.metrics.accuracy(self.targets['arc'] * 1000 + self.targets['label'],
+                                       self.predictions['arc'] * 1000 + self.predictions['label'], weights)
+        }
