@@ -20,8 +20,8 @@ class Graph:
         net = self._embedding(word_id, pos_id)
         net = self._bilstm(net, length)
         arc_head, arc_dep, label_head, label_dep = self._mlp(net)
-        arc_logits = self._biaffine(arc_head, arc_dep, True, False, 1)
-        label_logits = self._biaffine(label_head, label_dep, True, True, Config.model.dep_num)
+        arc_logits = self._biaffine(arc_head, arc_dep, True, False, 1)[:, 1:, :]  # remove root
+        label_logits = self._biaffine(label_head, label_dep, True, True, Config.model.dep_num)[:, 1:, :, :]  # remove root
         return arc_logits, label_logits
 
     def _embedding(self, word_id, pos_id):
@@ -38,18 +38,21 @@ class Graph:
 
     def _bilstm(self, inputs, length):
         for i in range(3):
-            with tf.variable_scope('bilstm' + str(i+1)):
+            with tf.variable_scope('bilstm' + str(i + 1)):
                 lstm_cell_fw = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_size, initializer=tf.orthogonal_initializer)
                 lstm_cell_bw = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_size, initializer=tf.orthogonal_initializer)
                 if self.is_training:
-                    lstm_cell_fw = tf.nn.rnn_cell.DropoutWrapper(lstm_cell_fw, output_keep_prob=Config.model.lstm_keep_prob,
+                    lstm_cell_fw = tf.nn.rnn_cell.DropoutWrapper(lstm_cell_fw,
+                                                                 output_keep_prob=Config.model.lstm_keep_prob,
                                                                  state_keep_prob=Config.model.lstm_keep_prob,
                                                                  variational_recurrent=True, dtype=tf.float32)
-                    lstm_cell_bw = tf.nn.rnn_cell.DropoutWrapper(lstm_cell_bw, output_keep_prob=Config.model.lstm_keep_prob,
+                    lstm_cell_bw = tf.nn.rnn_cell.DropoutWrapper(lstm_cell_bw,
+                                                                 output_keep_prob=Config.model.lstm_keep_prob,
                                                                  state_keep_prob=Config.model.lstm_keep_prob,
                                                                  variational_recurrent=True, dtype=tf.float32)
 
-                lstm_outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, inputs, length,
+                lstm_outputs, output_states = tf.nn.bidirectional_dynamic_rnn(lstm_cell_fw, lstm_cell_bw, inputs,
+                                                                              length,
                                                                               dtype=tf.float32)
                 bilstm_outputs = tf.concat(lstm_outputs, axis=-1)
             inputs = bilstm_outputs
@@ -75,15 +78,10 @@ class Graph:
         if bias_dep:
             dep = tf.concat([dep, tf.ones_like(dep)[:, :, 0:1]], -1)
 
-        batch_num, seq_length, _ = head.shape
         dep_size = dep.shape.as_list()[-1]
-        # todo split or slice
-        RU = tf.reshape(slim.fully_connected(head, dep_size * out_channels, None),
-                        tf.stack([batch_num, seq_length, dep_size, out_channels]))
-
-
-        RU = tf.transpose(RU, [0, 3, 1, 2])
+        RU = tf.stack(tf.split(slim.fully_connected(head, dep_size * out_channels, None), out_channels, -1), 1)
         logits = tf.matmul(RU, tf.stack([tf.transpose(dep, [0, 2, 1])] * out_channels, 1))
         logits = tf.transpose(logits, [0, 2, 3, 1])
-        outputs = tf.squeeze(logits)
-        return outputs
+        if logits.shape[-1] == 1:
+            logits = tf.squeeze(logits, -1)
+        return logits

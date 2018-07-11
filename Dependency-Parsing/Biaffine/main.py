@@ -20,14 +20,20 @@ def run(mode, run_config):
         train_input_fn, train_input_hook = data_loader.get_dataset_batch(train_data, buffer_size=5000,
                                                                          batch_size=Config.train.batch_size,
                                                                          scope="val")
+
         val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val")
+
+        logginhook = tf.train.LoggingTensorHook({'arc_loss': "sparse_softmax_cross_entropy_loss/value:0",
+                                                 'label_loss': "sparse_softmax_cross_entropy_loss_1/value:0",
+                                                 'step': 'global_step:0'},
+                                                every_n_iter=100)
 
         while True:
             print('*' * 40)
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
+            estimator.train(input_fn=train_input_fn, hooks=[logginhook, train_input_hook])
             estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1

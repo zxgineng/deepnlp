@@ -34,7 +34,7 @@ def build_and_read_train(file):
     vocab, pos_tag, dep_tag = set(), set(), set()
     Config.data.wp_pair = dict()
     total_sen, total_pos, total_arc, total_dep = [], [], [], []
-    sen, pos, arc, dep = [], [], [], []
+    sen, pos, arc, dep = ['<ROOT>'], ['<ROOT>'], [], []
 
     with open(file, encoding='utf8') as f:
         for line in f:
@@ -59,12 +59,12 @@ def build_and_read_train(file):
                 total_pos.append(pos)
                 total_arc.append(arc)
                 total_dep.append(dep)
-                sen, pos, arc, dep = [], [], [], []
+                sen, pos, arc, dep = ['<ROOT>'], ['<ROOT>'], [], []
 
     with open(vocab_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(vocab)))
+        f.write('\n'.join(['<PAD>', '<UNK>', '<ROOT>'] + sorted(vocab)))
     with open(pos_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(pos_tag)))
+        f.write('\n'.join(['<PAD>', '<ROOT>'] + sorted(pos_tag)))
     with open(dep_file, 'w', encoding='utf8') as f:
         f.write('\n'.join(sorted(dep_tag)))
 
@@ -73,7 +73,7 @@ def build_and_read_train(file):
 
 def read_test(file):
     total_sen, total_pos, total_arc, total_dep = [], [], [], []
-    sen, pos, arc, dep = [], [], [], []
+    sen, pos, arc, dep = ['<ROOT>'], ['<ROOT>'], [], []
     with open(file, encoding='utf8') as f:
         for line in f:
             line = line.strip()
@@ -89,7 +89,7 @@ def read_test(file):
                 total_pos.append(pos)
                 total_arc.append(arc)
                 total_dep.append(dep)
-                sen, pos, arc, dep = [], [], [], []
+                sen, pos, arc, dep = ['<ROOT>'], ['<ROOT>'], [], []
 
     return total_sen, total_pos, total_arc, total_dep
 
