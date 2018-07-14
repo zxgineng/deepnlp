@@ -13,17 +13,17 @@ class Graph:
             self.is_training = False
 
     def build(self, inputs):
-        fore_inputs = inputs['fore_word_images']
-        back_inputs = inputs['back_word_images']
-        fore_embeddings = self._cnn_embedding(fore_inputs)
+        for_inputs = inputs['for_inputs']
+        back_inputs = inputs['back_inputs']
+        for_embeddings = self._cnn_embedding(for_inputs)
         back_embeddings = self._cnn_embedding(back_inputs)
-        fore_embeddings = self._highway(fore_embeddings)
+        for_embeddings = self._highway(for_embeddings)
         back_embeddings = self._highway(back_embeddings)
-        with tf.variable_scope('fore_lstm'):
-            fore_outputs = self._lstm(fore_embeddings)
+        with tf.variable_scope('for_lstm'):
+            for_outputs = self._lstm(for_embeddings)
         with tf.variable_scope('back_lstm'):
             back_outputs = self._lstm(back_embeddings)
-        return fore_outputs, back_outputs
+        return for_outputs, back_outputs
 
     def _cnn_embedding(self, inputs):
         """inputs: [b,s,w,h,c]  outputs: [b*s,w,h,c]"""
@@ -78,9 +78,3 @@ class Graph:
         outputs = slim.dropout(outputs, Config.model.dropout_keep_prob, is_training=self.is_training)
         return outputs
 
-#
-# if __name__ == "__main__":
-#     Config('config/elmo.yml')
-#     x = {'fore_word_images': tf.placeholder(tf.float32, [2, 20, 32, 32, 1]),
-#          'back_word_images': tf.placeholder(tf.float32, [2, 20, 32, 32, 1])}
-#     Graph('').build(x)

@@ -28,7 +28,7 @@ train:
   batch_size: 20
   max_gradient_norm: 5.0
   sampled_num: 3000
-  initial_lr: 0.1
+  initial_lr: 0.2
 
   epoch: 0
   max_epoch: 10
