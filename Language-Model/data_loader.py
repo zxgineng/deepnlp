@@ -1,260 +1,25 @@
-# import argparse
-# import os
-# import numpy as np
-# import tensorflow as tf
-#
-# from utils import Config
-#
-# seg_labels = ['B', 'M', 'E', 'S']
-#
-#
-# def _int64_feature(value):
-#     if not isinstance(value, (list, tuple)):
-#         return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-#     else:
-#         return tf.train.Feature(int64_list=tf.train.Int64List(value=list(value)))
-#
-#
-# def convert_to_example(ids, tagids):
-#     """convert one sample to example"""
-#     data = {
-#         'id': _int64_feature(ids),
-#         'tagid': _int64_feature(tagids),
-#         'length': _int64_feature(len(ids))
-#     }
-#     features = tf.train.Features(feature=data)
-#     example = tf.train.Example(features=features)
-#     return example
-#
-#
-# def create_tfrecord():
-#     """create tfrecord"""
-#     output_dir = os.path.join(Config.data.base_path, Config.data.processed_path)
-#     if not os.path.exists(output_dir):
-#         os.makedirs(output_dir)
-#
-#     build_vocab()
-#     vocab = load_vocab('vocab.txt')
-#     tag_dict = load_tags()
-#
-#     filenames = sorted(os.listdir(os.path.join(Config.data.base_path, Config.data.raw_path)), reverse=True)
-#     tf_filename = '%s/train.tfrecord' % (output_dir)
-#     print('writing to tfrecord ...')
-#     with tf.python_io.TFRecordWriter(tf_filename) as tfrecord_writer:
-#         for i, fname in enumerate(filenames):
-#             if i % 2 == 0:
-#                 sentence = read_raw_text(fname)
-#             else:
-#                 position, tags = read_labels(fname)
-#                 ids = sentence2id(sentence, vocab)
-#                 tag_ids = tag2id(sentence, position, tags, tag_dict)
-#
-#                 example = convert_to_example(ids, tag_ids)
-#                 serialized = example.SerializeToString()
-#                 tfrecord_writer.write(serialized)
-#
-#
-# def build_vocab():
-#     """create vocab"""
-#     print("create vocab ...")
-#     words, _ = read_pretrained_wordvec(Config.data.wordvec_fname)
-#     vocab_fname = os.path.join(Config.data.base_path, Config.data.processed_path, 'vocab.txt')
-#     with open(vocab_fname, mode='w', encoding='utf8') as file:
-#         file.write('\n'.join(words) + '\n')
-#
-#
-# def get_dataset_batch(data, buffer_size=1000, batch_size=64, scope="train"):
-#     """create input func"""
-#
-#     class IteratorInitializerHook(tf.train.SessionRunHook):
-#         """Hook to initialise data iterator after Session is created."""
-#
-#         def __init__(self):
-#             super(IteratorInitializerHook, self).__init__()
-#             self.iterator_initializer_func = None
-#
-#         def after_create_session(self, session, coord):
-#             """Initialise the iterator after the session has been created."""
-#             self.iterator_initializer_func(session)
-#
-#     iterator_initializer_hook = IteratorInitializerHook()
-#
-#     def inputs():
-#         with tf.name_scope(scope):
-#             # Define placeholders
-#             input_placeholder = tf.placeholder(tf.string)
-#             # Build dataset iterator
-#             dataset = tf.data.TFRecordDataset(input_placeholder)
-#             dataset = dataset.map(preprocess)
-#
-#             if scope == "train":
-#                 dataset = dataset.repeat(None)  # Infinite iterations
-#             else:
-#                 dataset = dataset.repeat(1)  # 1 Epoch
-#             dataset = dataset.shuffle(buffer_size=buffer_size)
-#             dataset = dataset.padded_batch(batch_size, ([-1], [-1], []))
-#
-#             iterator = dataset.make_initializable_iterator()
-#             next_batch = iterator.get_next()
-#             id = next_batch[0]
-#             tagid = next_batch[1]
-#             length = next_batch[2]
-#
-#             # Set runhook to initialize iterator
-#             iterator_initializer_hook.iterator_initializer_func = \
-#                 lambda sess: sess.run(
-#                     iterator.initializer,
-#                     feed_dict={input_placeholder: data})
-#
-#             # Return batched (features, labels)
-#             return {'id': id, 'length': length}, {'tagid': tagid}
-#
-#     # Return function and hook
-#     return inputs, iterator_initializer_hook
-#
-#
-# def get_tfrecord():
-#     """Get tfrecord file list"""
-#     path = os.path.join(Config.data.base_path, Config.data.processed_path)
-#     tfr_file = [os.path.join(path, file) for file in os.listdir(path) if 'train' in file]
-#     return tfr_file
-#
-#
-# def load_vocab(vocab_fname):
-#     """Get the dictionary of tokens and their corresponding index"""
-#     with open(os.path.join(Config.data.base_path, Config.data.processed_path, vocab_fname), encoding='utf8') as f:
-#         words = f.read().splitlines()
-#     return {words[i]: i for i in range(len(words))}
-#
-#
-# def load_tags():
-#     """Get the dictionary of tags and their corresponding index"""
-#     tags = []
-#     for seg in seg_labels:
-#         for tag in Config.data.tag_labels:
-#             tags.append(seg + '-' + tag)
-#     tags.append('O')
-#     return {tags[i]: i for i in range(len(tags))}
-#
-#
-# def preprocess(serialized):
-#     def parse_tfrecord(serialized):
-#         """parse tfrecord"""
-#         features = {
-#             'id': tf.VarLenFeature(tf.int64),
-#             'tagid': tf.VarLenFeature(tf.int64),
-#             'length': tf.FixedLenFeature([], tf.int64)
-#         }
-#         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
-#         id = tf.sparse_tensor_to_dense(parsed_example['id'])
-#         tagid = tf.sparse_tensor_to_dense(parsed_example['tagid'])
-#         length = parsed_example['length']
-#         return id, tagid, length
-#
-#     return parse_tfrecord(serialized)
-#
-#
-# def read_raw_text(fname):
-#     """read one sentence from a single file"""
-#     path = os.path.join(Config.data.base_path, Config.data.raw_path)
-#     with open(os.path.join(path, fname), encoding='utf8') as f:
-#         sentence = f.readline().strip()
-#     return sentence
-#
-#
-# def read_labels(fname):
-#     """read labels from a single file"""
-#     path = os.path.join(Config.data.base_path, Config.data.raw_path)
-#     position = []
-#     tags = []
-#     with open(os.path.join(path, fname), encoding='utf8') as f:
-#         for line in f:
-#             tokens = line.strip().split('\t')
-#             if len(tokens) != 4:
-#                 continue
-#             position.append((int(tokens[1]), int(tokens[2])))
-#             tags.append(tokens[3])
-#
-#     return position, tags
-#
-#
-# def read_pretrained_wordvec(fname):
-#     """read pretrained wordvec and convert it to numpy"""
-#     fname = os.path.join(Config.data.base_path, fname)
-#     words = ['<PAD>']
-#     wordvec = [[0.0] * Config.model.embedding_size]
-#
-#     with open(fname, encoding='utf8') as f:
-#         for line in f:
-#             split = line.strip().split(' ')
-#             word = split[0]
-#             vec = split[1:]
-#             if len(vec) == Config.model.embedding_size:
-#                 words.append(word)
-#                 wordvec.append(vec)
-#     wordvec = np.array(wordvec)
-#
-#     return words, wordvec
-#
-#
-# def sentence2id(sentence, vocab):
-#     """ Convert all the tokens in the data to their corresponding
-#     index in the vocabulary. """
-#     ids = []
-#     for token in sentence:
-#         if token == ' ':
-#             ids.append(vocab['<PAD>'])
-#         elif token.isdigit():
-#             ids.append(vocab['<NUM>'])
-#         else:
-#             ids.append(vocab.get(token, vocab['<unk>']))
-#     return ids
-#
-#
-# def tag2id(sentence, position, tags, tag_dict):
-#     """convert tags read from a single file to a id squence"""
-#     ids = [tag_dict['O']] * len(sentence)
-#     for p, t in zip(position, tags):
-#         if p[0] == p[1]:
-#             ids[p[0]] = tag_dict['S-' + t]
-#         else:
-#             ids[p[0]:p[1] + 1] = [tag_dict['M-' + t]] * (p[1] + 1 - p[0])
-#             ids[p[0]] = tag_dict['B-' + t]
-#             ids[p[1]] = tag_dict['E-' + t]
-#     return ids
-#
-#
-# if __name__ == '__main__':
-#     parser = argparse.ArgumentParser(
-#         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-#     parser.add_argument('--config', type=str, default='config/ner.yml',
-#                         help='config file name')
-#     args = parser.parse_args()
-#
-#     Config(args.config)
-#
-#     create_tfrecord()
-
-
 import argparse
 import os
 import sys
 import numpy as np
 import tensorflow as tf
 import pickle
-import re
+import pygame
+import cv2
 
-from utils import Config
+from utils import Config, strQ2B
+
+pygame.init()
 
 
-def _int64_feature(value):
+def _bytes_feature(value):
     if not isinstance(value, (list, tuple)):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
     else:
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=list(value)))
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=list(value)))
 
 
-def split_train_test(split_rate=0.05):
+def split_train_test(split_rate=0.03):
     train_files = []
     test_files = []
     dataset_path = os.listdir(Config.data.dataset_path)
@@ -272,31 +37,16 @@ def split_train_test(split_rate=0.05):
         f.write('\n'.join(test_files))
 
 
-def get_tfrecord(name):
+def get_tfrecord(folder, name):
     tfrecords = []
-    files = os.listdir(Config.data.processed_path)
+    files = os.listdir(os.path.join(Config.data.processed_path, folder))
     for file in files:
         if name in file and file.endswith('.tfrecord'):
-            tfrecords.append(os.path.join(Config.data.processed_path, file))
+            tfrecords.append(os.path.join(Config.data.processed_path, folder, file))
     if len(tfrecords) == 0:
         raise RuntimeError('TFrecord not found.')
 
     return tfrecords
-
-
-def build_tag():
-    ner = ['ORG']  # TODO 枚举类型
-    tag = [t + '-' + n for t in ['B', 'I', 'S'] for n in ner] + ['O']
-    tag_file = os.path.join(Config.data.processed_path, Config.data.tag_file)
-    with open(tag_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(tag))
-
-
-def load_tag():
-    tag_file = os.path.join(Config.data.processed_path, Config.data.tag_file)
-    with open(tag_file, encoding='utf8') as f:
-        tag = f.read().splitlines()
-    return {t: i for i, t in enumerate(tag)}
 
 
 def build_vocab():
@@ -309,110 +59,140 @@ def build_vocab():
 
     for i, file in enumerate(train_files):
         with open(file, encoding='utf8') as f:
-            text = f.read()
-            co = re.compile('\s[A-Z]-?[A-Z]*\\n')
-            text = re.sub(co, '', text)
-            text = ''.join(text.split())
-            vocab.update(text)
+            content = strQ2B(''.join(f.read().split()))
+            vocab.update(content)
             sys.stdout.write('\r>> reading text %d/%d' % (i + 1, len(train_files)))
             sys.stdout.flush()
     print()
 
     with open(vocab_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(['<PAD>', '<UNK>'] + sorted(list(vocab))))
+        f.write('\n'.join(['<UNK>', '<START/>', '</END>'] + sorted(list(vocab))))
 
 
 def load_vocab():
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     with open(vocab_file, encoding='utf8') as f:
         words = f.read().splitlines()
+    assert len(words) == Config.model.vocab_num
     return {word: i for i, word in enumerate(words)}
 
 
-def build_wordvec_pkl():
-    file = os.path.join(Config.data.processed_path, Config.data.wordvec_file)
+def build_char_pkl():
+    print('creating char pixel pkl ...')
     vocab = load_vocab()
-    vocab_size = len(vocab)
-    wordvec = np.zeros([vocab_size, Config.model.embedding_size])
+    char_images = {}
+    font = pygame.font.Font(os.path.join(Config.data.processed_path, "SourceHanSerif-Regular.ttc"),
+                            Config.model.char_image_size)
+    for char in vocab:
+        if char == '<UNK>':
+            continue
+        try:
+            rtext = font.render(char, True, (0, 0, 0), (255, 255, 255))
+            img = pygame.surfarray.array3d(rtext)
+            img = img.swapaxes(0, 1)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = img[1:, :]
+        except Exception as e:
+            print(e.args)
+            img = np.ones((Config.model.char_image_size, Config.model.char_image_size)) * 255
+        if img.shape[0] > img.shape[1]:
+            pad_width = (img.shape[0] - img.shape[1]) // 2
+            img = np.pad(img, [[0, 0], [pad_width, pad_width]], 'constant', constant_values=(255, 255))
+        img = cv2.resize(img, (Config.model.char_image_size, Config.model.char_image_size))
+        img = np.expand_dims(img, -1)
+        char_images[char] = img
 
-    with open(file, encoding='utf8') as f:
-        wordvec_dict = {}
-        for line in f:
-            if len(line.split()) < Config.model.embedding_size + 1:
-                continue
-            word = line.strip().split(' ')[0]
-            vec = line.strip().split(' ')[1:]
-            wordvec_dict[word] = vec
-
-    for index, word in enumerate(vocab):
-        if word in wordvec_dict:
-
-            wordvec[index] = wordvec_dict[word]
-        else:
-            wordvec[index] = np.random.rand(Config.model.embedding_size)
-
-    with open(os.path.join(Config.data.processed_path, Config.data.wordvec_pkl), 'wb') as f:
-        pickle.dump(wordvec, f)
+    with open(os.path.join(Config.data.processed_path, Config.data.char_pkl), 'wb') as f:
+        pickle.dump(char_images, f)
 
 
-def load_pretrained_vec():
-    file = os.path.join(Config.data.processed_path, Config.data.wordvec_pkl)
+def load_char2image():
+    file = os.path.join(Config.data.processed_path, Config.data.char_pkl)
     with open(file, 'rb') as f:
-        wordvec = pickle.load(f)
-    return wordvec
+        char_image = pickle.load(f)
+    return char_image
 
 
-def read_files(files):
-    total_sentences, total_labels = [], []
-    for i, file in enumerate(files):
-        sentences, labels = read_text(file)
-        total_sentences.extend(sentences)
-        total_labels.extend(labels)
-        sys.stdout.write('\r>> reading text into memory %d/%d' % (i + 1, len(files)))
-        sys.stdout.flush()
-    print()
-
-    return total_sentences, total_labels
-
-
-def read_text(file):
-    sentences = []
-    words = []
-    labels = []
-    la = []
+def read_file(file):
     with open(file, encoding='utf8') as f:
-        for line in f:
-            line = line.strip()
-            if not line and words:
-                sentences.append(words)
-                labels.append(la)
-            else:
-                words.append(line.strip()[0])
-                la.append(line.strip()[1])
-    return sentences, labels
+        content = f.read().replace('。', '。\n').replace('?', '?\n').replace('!', '!\n').replace('……', '……\n').replace(
+            '\u3000', ' ')
+        sentences = content.split('\n')
+
+        for_samples = []
+        for_labels = []
+        inputs_temp = []
+        labels_temp = []
+        for sen in sentences:
+            sen = sen.strip()
+            if sen:
+                inputs = ['<START/>'] + list(sen)
+                labels = list(sen) + ['</END>']
+                l = Config.model.seq_length - len(inputs_temp)
+                inputs_temp.extend(inputs[:l])
+                labels_temp.extend(labels[:l])
+
+            if len(inputs_temp) == Config.model.seq_length:
+                for_samples.append(inputs_temp)
+                for_labels.append(labels_temp)
+                inputs_temp = []
+                labels_temp = []
+
+        back_samples = []
+        back_labels = []
+        inputs_temp = []
+        labels_temp = []
+        for sen in reversed(sentences):
+            sen = sen.strip()
+            if sen:
+                inputs = ['</END>'] + list(reversed(sen))
+                labels = list(reversed(sen)) + ['<START/>']
+                l = Config.model.seq_length - len(inputs_temp)
+                inputs_temp.extend(inputs[:l])
+                labels_temp.extend(labels[:l])
+
+            if len(inputs_temp) == Config.model.seq_length:
+                back_samples.append(inputs_temp)
+                back_labels.append(labels_temp)
+                inputs_temp = []
+                labels_temp = []
+
+    return for_samples, for_labels, back_samples, back_labels
 
 
-def word2id(words, vocab):
-    word_id = [vocab.get(word, vocab['<UNK>']) for word in words]
-    return word_id
+def word2image(words, char2image):
+    char_images = []
+    for char in words:
+        if char in char2image:
+            char_images.append(char2image[char])
+        else:
+            font = pygame.font.Font(os.path.join(Config.data.processed_path, "SourceHanSerif-Regular.ttc"),
+                                    Config.model.char_image_size)
+            try:
+                rtext = font.render(char, True, (0, 0, 0), (255, 255, 255))
+                img = pygame.surfarray.array3d(rtext)
+                img = img.swapaxes(0, 1)
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                img = img[1:, :]
+            except Exception as e:
+                print(e.args)
+                img = np.ones((Config.model.char_image_size, Config.model.char_image_size)) * 255
+            if img.shape[0] > img.shape[1]:
+                pad_width = (img.shape[0] - img.shape[1]) // 2
+                img = np.pad(img, [[0, 0], [pad_width, pad_width]], 'constant', constant_values=(255, 255))
+            img = cv2.resize(img, (Config.model.char_image_size, Config.model.char_image_size))
+            img = np.expand_dims(img, -1)
+            char_images.append(img)
+    return char_images
 
 
-def label2id(labels, tag):
-    label_id = [tag[label] for label in labels]
-    return label_id
+def convert_to_example(inputs_images, labels_images):
+    inputs_images = np.array(inputs_images, np.uint8)
+    labels_images = np.array(labels_images, np.uint8)
 
-
-def id2label(id, tag):
-    id2label = {i: t for i, t in enumerate(tag)}
-    return [id2label[i] for i in id]
-
-
-def convert_to_example(word_id, label_id):
-    """convert one sample to example"""
     data = {
-        'word_id': _int64_feature(word_id),
-        'label_id': _int64_feature(label_id),
-        'length': _int64_feature(len(word_id))
+        'inputs_images': _bytes_feature(inputs_images.tostring()),
+        'labels_images': _bytes_feature(labels_images.tostring())
     }
     features = tf.train.Features(feature=data)
     example = tf.train.Example(features=features)
@@ -422,17 +202,24 @@ def convert_to_example(word_id, label_id):
 def preprocess(serialized):
     def parse_tfrecord(serialized):
         features = {
-            'word_id': tf.VarLenFeature(tf.int64),
-            'label_id': tf.VarLenFeature(tf.int64),
-            'length': tf.FixedLenFeature([], tf.int64)
+            'inputs_images': tf.FixedLenFeature([], tf.string),
+            'labels_images': tf.FixedLenFeature([], tf.string)
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
-        word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])
-        label_id = tf.sparse_tensor_to_dense(parsed_example['label_id'])
-        length = parsed_example['length']
-        return word_id, label_id, length
+        inputs_images = tf.decode_raw(parsed_example['inputs_images'], tf.uint8)
+        inputs_images = tf.reshape(inputs_images,
+                                   [Config.model.seq_length, Config.model.char_image_size, Config.model.char_image_size,
+                                    1])
+        labels_images = tf.decode_raw(parsed_example['labels_images'], tf.uint8)
+        labels_images = tf.reshape(labels_images,
+                                   [Config.model.seq_length, Config.model.char_image_size, Config.model.char_image_size,
+                                    1])
+        return inputs_images, labels_images
 
-    return parse_tfrecord(serialized)
+    inputs_images, labels_images = parse_tfrecord(serialized)
+    inputs_images = (inputs_images / 255 - 0.5) * 2
+    labels_images = (labels_images / 255 - 0.5) * 2
+    return inputs_images, labels_images
 
 
 def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
@@ -457,81 +244,102 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             else:
                 dataset = dataset.repeat(1)  # 1 Epoch
             dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], []))
+            dataset = dataset.batch(batch_size)
 
             iterator = dataset.make_initializable_iterator()
             next_batch = iterator.get_next()
-            word_id = next_batch[0]
-            label_id = next_batch[1]
-            length = next_batch[2]
+            inputs_images = next_batch[0]
+            labels_images = next_batch[1]
 
             iterator_initializer_hook.iterator_initializer_func = \
                 lambda sess: sess.run(
                     iterator.initializer,
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
-            return {'word_id': word_id, 'length': length}, label_id
+            return inputs_images, labels_images
 
     return inputs, iterator_initializer_hook
 
 
+def get_both_batch(dataA, dataB, buffer_size=1, batch_size=64, scope="train"):
+    inputsA, iterator_initializer_hookA = get_dataset_batch(dataA, buffer_size, batch_size, scope)
+    inputsB, iterator_initializer_hookB = get_dataset_batch(dataB, buffer_size, batch_size, scope)
+
+    def inputs():
+        for_inputs, for_labels = inputsA()
+        back_inputs, back_labels = inputsB()
+
+        return {'for_inputs': for_inputs, 'back_inputs': back_inputs}, \
+               {'for_labels': for_labels, 'back_labels': back_labels}
+
+    return inputs, [iterator_initializer_hookA, iterator_initializer_hookB]
+
+
 def create_tfrecord():
-    split_train_test()
-    build_vocab()
-    build_wordvec_pkl()
-    vocab = load_vocab()
-    tag = load_tag()
+    # split_train_test()
+    # build_vocab()
+    # build_char_pkl()
+    char2image = load_char2image()
 
-    if len(tag) != Config.model.fc_unit:
-        raise ValueError('length of tag dict must be as same as fc_unit')
-
-    if not os.path.exists(os.path.join(Config.data.processed_path, 'tfrecord')):
-        os.makedirs(os.path.join(Config.data.processed_path, 'tfrecord'))
+    if not os.path.exists(os.path.join(Config.data.processed_path, 'for-tfrecord')):
+        os.makedirs(os.path.join(Config.data.processed_path, 'for-tfrecord'))
+    if not os.path.exists(os.path.join(Config.data.processed_path, 'back-tfrecord')):
+        os.makedirs(os.path.join(Config.data.processed_path, 'back-tfrecord'))
 
     print('writing to tfrecord ...')
     for data in [Config.data.train_data, Config.data.test_data]:
         file = os.path.join(Config.data.processed_path, data)
         with open(file, encoding='utf8') as f:
-            dataset_files = f.read().split('\n')
-        dataset_files = np.random.permutation(dataset_files)
+            dataset_files = f.read().split()
+            dataset_files = np.random.permutation(dataset_files)  # totally shuffled
 
         fidx = 0
-        total_i = 0
-        for n in range((len(dataset_files) - 1) // 50000 + 1):  # don't have that much memory, data must be split
-            part_dataset_files = dataset_files[n * 50000:(n + 1) * 50000]
+        i = 0
+        while i < len(dataset_files):
 
-            sentences, labels = read_files(part_dataset_files)
-            i = 0
-            while i < len(sentences):
-                if data in Config.data.train_data:
-                    tf_file = 'tfrecord/train_%d.tfrecord' % fidx
-                else:
-                    tf_file = 'tfrecord/test.tfrecord'
-                tf_file = os.path.join(Config.data.processed_path, tf_file)
+            if data is Config.data.train_data:
+                for_tf_file = 'for-tfrecord/train_%d.tfrecord' % fidx
+                back_tf_file = 'back-tfrecord/train_%d.tfrecord' % fidx
+            else:
+                for_tf_file = 'for-tfrecord/test.tfrecord'
+                back_tf_file = 'back-tfrecord/test.tfrecord'
+            for_tf_file = os.path.join(Config.data.processed_path, for_tf_file)
+            back_tf_file = os.path.join(Config.data.processed_path, back_tf_file)
 
-                with tf.python_io.TFRecordWriter(tf_file) as tfrecord_writer:
-                    j = 0
-                    while i < len(sentences):
-                        sys.stdout.write('\r>> converting %s %d/%d' % (data, total_i + 1, len(dataset_files)))
-                        sys.stdout.flush()
-                        word_id = word2id(sentences[i], vocab)
-                        label_id = label2id(labels[i], tag)
-                        example = convert_to_example(word_id, label_id)
+            with tf.python_io.TFRecordWriter(for_tf_file) as for_tf_writer, \
+                    tf.python_io.TFRecordWriter(back_tf_file) as back_tf_writer:
+                j = 0
+                while i < len(dataset_files):
+                    sys.stdout.write('\r>> converting %s %d/%d' % (data, i + 1, len(dataset_files)))
+                    sys.stdout.flush()
+
+                    for_samples, for_labels, back_samples, back_labels = read_file(dataset_files[i])
+                    i += 1
+                    for n in range(len(for_samples)):
+                        inputs_images = word2image(for_samples[n], char2image)
+                        labels_images = word2image(for_labels[n], char2image)
+                        example = convert_to_example(inputs_images, labels_images)
                         serialized = example.SerializeToString()
-                        tfrecord_writer.write(serialized)
-                        i += 1
+                        for_tf_writer.write(serialized)
+
+                        inputs_images = word2image(back_samples[n], char2image)
+                        labels_images = word2image(back_labels[n], char2image)
+                        example = convert_to_example(inputs_images, labels_images)
+                        serialized = example.SerializeToString()
+                        back_tf_writer.write(serialized)
+
                         j += 1
-                        total_i += 1
-                        if j >= 5000 and data in Config.data.train_data:  # totally shuffled
-                            break
-                    fidx += 1
-                print('\n%s complete' % tf_file)
+                    if j >= 5000 and data is Config.data.train_data:
+                        break
+                fidx += 1
+            print('\n%s complete' % for_tf_file)
+            print('%s complete' % back_tf_file)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', type=str, default='config/joint-seg-tag.yml',
+    parser.add_argument('--config', type=str, default='config/elmo.yml',
                         help='config file name')
     args = parser.parse_args()
 

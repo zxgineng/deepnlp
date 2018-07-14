@@ -101,3 +101,17 @@ class SubConfig:
 
     def __repr__(self):
         return json.dumps(self.__dict__["__dict__"], indent=4)
+
+def strQ2B(ustring):
+    ss = []
+    for s in ustring:
+        rstring = ""
+        for uchar in s:
+            inside_code = ord(uchar)
+            if inside_code == 12288:
+                inside_code = 32
+            elif (inside_code >= 65281 and inside_code <= 65374):
+                inside_code -= 65248
+            rstring += chr(inside_code)
+        ss.append(rstring)
+    return ''.join(ss)
