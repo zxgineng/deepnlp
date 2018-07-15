@@ -5,6 +5,7 @@ import os
 import data_loader
 from model import Model
 from utils import Config
+from hooks import MSTHook
 
 
 def run(mode, run_config):
@@ -21,20 +22,19 @@ def run(mode, run_config):
                                                                          batch_size=Config.train.batch_size,
                                                                          scope="val")
 
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val")
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=128, scope="val")
 
-        logginhook = tf.train.LoggingTensorHook({'arc_loss': "sparse_softmax_cross_entropy_loss/value:0",
-                                                 'label_loss': "sparse_softmax_cross_entropy_loss_1/value:0",
-                                                 'step': 'global_step:0'},
-                                                every_n_iter=100)
+        logginghook = tf.train.LoggingTensorHook({'arc_loss': "sparse_softmax_cross_entropy_loss/value:0",
+                                                  'label_loss': "sparse_softmax_cross_entropy_loss_1/value:0",
+                                                  'step': 'global_step:0'}, every_n_iter=100)
 
         while True:
             print('*' * 40)
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            estimator.train(input_fn=train_input_fn, hooks=[logginhook, train_input_hook])
-            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
+            estimator.train(input_fn=train_input_fn, hooks=[logginghook, train_input_hook])
+            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook, MSTHook()])
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
@@ -42,8 +42,8 @@ def run(mode, run_config):
 
     elif mode == 'eval':
         val_data = data_loader.get_tfrecord('test')
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val")
-        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=128, scope="val")
+        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook, MSTHook()])
 
 
 def main(mode):

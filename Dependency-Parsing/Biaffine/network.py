@@ -20,8 +20,8 @@ class Graph:
         net = self._embedding(word_id, pos_id)
         net = self._bilstm(net, length)
         arc_head, arc_dep, label_head, label_dep = self._mlp(net)
-        arc_logits = self._biaffine(arc_head, arc_dep, True, False, 1)[:, 1:, :]  # remove root
-        label_logits = self._biaffine(label_head, label_dep, True, True, Config.model.dep_num)[:, 1:, :, :]  # remove root
+        arc_logits = self._biaffine(arc_head, arc_dep, True, False, 1)
+        label_logits = self._biaffine(label_head, label_dep, True, True, Config.model.dep_num)
         return arc_logits, label_logits
 
     def _embedding(self, word_id, pos_id):

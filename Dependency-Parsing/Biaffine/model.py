@@ -13,7 +13,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions, self.metrics = None, None, None, None
+        self.loss, self.train_op, self.predictions = None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -24,29 +24,30 @@ class Model:
             mode=mode,
             loss=self.loss,
             train_op=self.train_op,
-            eval_metric_ops=self.metrics,
             predictions=self.predictions)
 
     def build_graph(self):
         graph = Graph(self.mode)
         arc_logits, label_logits = graph.build(self.inputs)
+        tf.identity(arc_logits, 'arc_logits')
+        tf.identity(label_logits, 'label_logits')
 
-        arc_pred = tf.argmax(arc_logits, -1)
-        arc_mask = tf.one_hot(arc_pred, tf.cast(tf.reduce_max(self.inputs['length']), tf.int32), True, False,
-                              dtype=tf.bool)
-
-        label_pred = tf.argmax(tf.boolean_mask(label_logits, arc_mask), -1)
-        label_pred = tf.reshape(label_pred, tf.stack([-1, tf.reduce_max(self.inputs['length']) - 1]))
-
-        self.predictions = {'arc': arc_pred, 'dep_id': label_pred}
+        self.predictions = {'arc_logits': arc_logits, 'label_logits': label_logits}
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(arc_logits, label_logits)
-            self._build_train_op()
-            self._build_metric()
+            if self.mode == tf.estimator.ModeKeys.TRAIN:
+                self._build_train_op()
+            else:
+                arc_acc = tf.placeholder(tf.float32, None, 'arc_ph')
+                label_acc = tf.placeholder(tf.float32, None, 'label_ph')
+                tf.summary.scalar('UAS', arc_acc, ['acc'], 'score')
+                tf.summary.scalar('LAS', label_acc, ['acc'], 'score')
 
     def _build_loss(self, arc_logits, label_logits):
-        weights = tf.sequence_mask(self.inputs['length'] - 1, dtype=tf.float32)  # remove root
+        arc_logits = arc_logits[:, 1:, :]  # remove root
+        label_logits = label_logits[:, 1:, :, :]  # remove root
+        weights = tf.sequence_mask(self.inputs['length'] - 1, dtype=tf.float32)
         arc_loss = tf.losses.sparse_softmax_cross_entropy(self.targets['arc'], arc_logits, weights)
 
         arc_mask = tf.one_hot(self.targets['arc'], tf.cast(tf.reduce_max(self.inputs['length']), tf.int32), True, False,
@@ -59,20 +60,15 @@ class Model:
 
         self.loss = arc_loss + label_loss
 
+        tf.summary.scalar('arc_loss', arc_loss)
+        tf.summary.scalar('label_loss', label_loss)
+
     def _build_train_op(self):
         global_step = tf.train.get_global_step()
-        learning_rate = Config.train.initial_lr * tf.pow(0.75, tf.cast(global_step // 1500, tf.float32))
+        learning_rate = Config.train.initial_lr * tf.pow(0.75, tf.cast(global_step // 5000, tf.float32))
 
         self.train_op = slim.optimize_loss(
             self.loss, global_step,
             optimizer=tf.train.AdamOptimizer(learning_rate, beta1=0.9, beta2=0.9),
             learning_rate=learning_rate,
             clip_gradients=Config.train.max_gradient_norm)
-
-    def _build_metric(self):
-        weights = tf.sequence_mask(self.inputs['length'] - 1, dtype=tf.float32)
-        self.metrics = {
-            "UAS": tf.metrics.accuracy(self.targets['arc'], self.predictions['arc'], weights),
-            'LAS': tf.metrics.accuracy(self.targets['arc'] * 1000 + self.targets['dep_id'],
-                                       self.predictions['arc'] * 1000 + self.predictions['dep_id'], weights)
-        }

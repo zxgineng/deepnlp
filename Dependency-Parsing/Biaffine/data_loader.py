@@ -32,7 +32,6 @@ def build_and_read_train(file):
     pos_file = os.path.join(Config.data.processed_path, Config.data.pos_file)
     dep_file = os.path.join(Config.data.processed_path, Config.data.dep_file)
     vocab, pos_tag, dep_tag = set(), set(), set()
-    Config.data.wp_pair = dict()
     total_sen, total_pos, total_arc, total_dep = [], [], [], []
     sen, pos, arc, dep = ['<ROOT>'], ['<ROOT>'], [], []
 
@@ -41,14 +40,10 @@ def build_and_read_train(file):
             line = line.strip()
             if line:
                 line = strQ2B(line)
-                w, p, a, d = line.split()
+                _, w, _, p, _, _, a, d, _, _ = line.split()
                 vocab.add(w)
                 pos_tag.add(p)
                 dep_tag.add(d)
-                if w not in Config.data.wp_pair:
-                    Config.data.wp_pair[w] = p
-                else:
-                    Config.data.wp_pair[w] = None
 
                 sen.append(w)
                 pos.append(p)
@@ -79,7 +74,7 @@ def read_test(file):
             line = line.strip()
             if line:
                 line = strQ2B(line)
-                w, p, a, d = line.split()
+                _, w, _, p, _, _, a, d, _, _ = line.split()
                 sen.append(w)
                 pos.append(p)
                 arc.append(int(a))
@@ -163,10 +158,9 @@ def dep2id(dep, dict):
     dep_id = [dict[d] for d in dep]
     return dep_id
 
-
-# def id2label(id, tag):
-#     id2label = {i: t for i, t in enumerate(tag)}
-#     return [id2label[i] for i in id]
+def id2dep(id, dict):
+    id2dep = {i: t for i, t in enumerate(dict)}
+    return [id2dep[i] for i in id]
 
 
 def convert_to_example(word_id, pos_id, arc, dep_id):

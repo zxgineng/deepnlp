@@ -22,8 +22,8 @@ model:
 
   word_embedding_size: 300
   pos_embedding_size: 100
-  pos_num: 26
-  dep_num: 69
+  pos_num: 39
+  dep_num: 46
 
 train:
   batch_size: 20
