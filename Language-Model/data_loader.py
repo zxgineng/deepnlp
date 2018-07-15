@@ -283,9 +283,9 @@ def get_both_batch(dataA, dataB, buffer_size=1, batch_size=64, scope="train"):
 
 
 def create_tfrecord():
-    # split_train_test()
-    # build_vocab()
-    # build_char_pkl()
+    split_train_test()
+    build_vocab()
+    build_char_pkl()
     vocab = load_vocab()
     char2image = load_char2image()
 
