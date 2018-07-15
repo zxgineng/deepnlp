@@ -180,10 +180,4 @@ class Tokenizer():
         self.initialized = True
 
 dt = Tokenizer()
-# cut = dt.cut
 
-# if __name__ == '__main__':
-#     # sentence = input('输入:')
-#     sentence = '我又双叒叕abc去北京大学游玩了'
-#     t = Tokenizer()
-#     print(list(t.cut(sentence)))
