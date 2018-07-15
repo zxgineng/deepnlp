@@ -12,6 +12,13 @@ from utils import Config, strQ2B
 pygame.init()
 
 
+def _int64_feature(value):
+    if not isinstance(value, (list, tuple)):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+    else:
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=list(value)))
+
+
 def _bytes_feature(value):
     if not isinstance(value, (list, tuple)):
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -186,13 +193,17 @@ def word2image(words, char2image):
     return char_images
 
 
-def convert_to_example(inputs_images, labels_images):
+def word2id(words, vocab):
+    word_id = [vocab.get(word, vocab['<UNK>']) for word in words]
+    return word_id
+
+
+def convert_to_example(inputs_images, label_id):
     inputs_images = np.array(inputs_images, np.uint8)
-    labels_images = np.array(labels_images, np.uint8)
 
     data = {
         'inputs_images': _bytes_feature(inputs_images.tostring()),
-        'labels_images': _bytes_feature(labels_images.tostring())
+        'label_id': _int64_feature(label_id)
     }
     features = tf.train.Features(feature=data)
     example = tf.train.Example(features=features)
@@ -203,23 +214,19 @@ def preprocess(serialized):
     def parse_tfrecord(serialized):
         features = {
             'inputs_images': tf.FixedLenFeature([], tf.string),
-            'labels_images': tf.FixedLenFeature([], tf.string)
+            'label_id': tf.FixedLenFeature([Config.model.seq_length], tf.int64),
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         inputs_images = tf.decode_raw(parsed_example['inputs_images'], tf.uint8)
         inputs_images = tf.reshape(inputs_images,
                                    [Config.model.seq_length, Config.model.char_image_size, Config.model.char_image_size,
                                     1])
-        labels_images = tf.decode_raw(parsed_example['labels_images'], tf.uint8)
-        labels_images = tf.reshape(labels_images,
-                                   [Config.model.seq_length, Config.model.char_image_size, Config.model.char_image_size,
-                                    1])
-        return inputs_images, labels_images
+        label_id = parsed_example['label_id']
+        return inputs_images, label_id
 
-    inputs_images, labels_images = parse_tfrecord(serialized)
+    inputs_images, label_id = parse_tfrecord(serialized)
     inputs_images = (inputs_images / 255 - 0.5) * 2
-    labels_images = (labels_images / 255 - 0.5) * 2
-    return inputs_images, labels_images
+    return inputs_images, label_id
 
 
 def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
@@ -249,14 +256,14 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             iterator = dataset.make_initializable_iterator()
             next_batch = iterator.get_next()
             inputs_images = next_batch[0]
-            labels_images = next_batch[1]
+            label_id = next_batch[1]
 
             iterator_initializer_hook.iterator_initializer_func = \
                 lambda sess: sess.run(
                     iterator.initializer,
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
-            return inputs_images, labels_images
+            return inputs_images, label_id
 
     return inputs, iterator_initializer_hook
 
@@ -279,6 +286,7 @@ def create_tfrecord():
     # split_train_test()
     # build_vocab()
     # build_char_pkl()
+    vocab = load_vocab()
     char2image = load_char2image()
 
     if not os.path.exists(os.path.join(Config.data.processed_path, 'for-tfrecord')):
@@ -317,14 +325,14 @@ def create_tfrecord():
                     i += 1
                     for n in range(len(for_samples)):
                         inputs_images = word2image(for_samples[n], char2image)
-                        labels_images = word2image(for_labels[n], char2image)
-                        example = convert_to_example(inputs_images, labels_images)
+                        label_id = word2id(for_labels[n], vocab)
+                        example = convert_to_example(inputs_images, label_id)
                         serialized = example.SerializeToString()
                         for_tf_writer.write(serialized)
 
                         inputs_images = word2image(back_samples[n], char2image)
-                        labels_images = word2image(back_labels[n], char2image)
-                        example = convert_to_example(inputs_images, labels_images)
+                        label_id = word2id(back_labels[n], vocab)
+                        example = convert_to_example(inputs_images, label_id)
                         serialized = example.SerializeToString()
                         back_tf_writer.write(serialized)
 

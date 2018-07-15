@@ -17,6 +17,10 @@ def run(mode, run_config):
         model_dir=Config.train.model_dir,
         config=run_config)
 
+    logginghook = tf.train.LoggingTensorHook({'for_loss': "Mean:0",
+                                              'back_loss': "Mean_1:0",
+                                              'step': 'global_step:0'}, every_n_iter=100)
+
     if mode == 'train':
         for_train_data = data_loader.get_tfrecord('for-tfrecord', 'train')
         for_val_data = data_loader.get_tfrecord('for-tfrecord', 'test')
@@ -33,17 +37,19 @@ def run(mode, run_config):
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            estimator.train(input_fn=train_input_fn, hooks=train_input_hook)
-            estimator.evaluate(input_fn=val_input_fn, hooks=val_input_hook)
+            estimator.train(input_fn=train_input_fn, hooks=[logginghook] + train_input_hook)
+            estimator.evaluate(input_fn=val_input_fn, hooks=[logginghook] + val_input_hook)
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
                 break
 
     elif mode == 'eval':
-        val_data = data_loader.get_tfrecord('test')
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=20, scope="val")
-        estimator.evaluate(input_fn=val_input_fn, hooks=val_input_hook)
+        for_val_data = data_loader.get_tfrecord('for-tfrecord', 'test')
+        back_val_data = data_loader.get_tfrecord('back-tfrecord', 'test')
+        val_input_fn, val_input_hook = data_loader.get_both_batch(for_val_data, back_val_data, batch_size=20,
+                                                                  scope="val")
+        estimator.evaluate(input_fn=val_input_fn, hooks=[logginghook] + val_input_hook)
 
 
 def main(mode):

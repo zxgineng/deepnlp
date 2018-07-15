@@ -42,14 +42,14 @@ class Model:
         softmax_w = tf.get_variable('w', [Config.model.vocab_num, Config.model.embedding_size], tf.float32,
                                     slim.xavier_initializer())
         softmax_b = tf.get_variable('b', [Config.model.vocab_num], tf.float32, tf.constant_initializer(0.0))
-        if self.mode == tf.estimator.ModeKeys.TRAIN:
-            for_loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(softmax_w, softmax_b, for_targets, for_outputs,
-                                                                 Config.train.sampled_num, Config.model.vocab_num))
-            tf.summary.scalar('for-loss', for_loss)
-            back_loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(softmax_w, softmax_b, back_targets, back_outputs,
-                                                                  Config.train.sampled_num, Config.model.vocab_num))
-            tf.summary.scalar('back-loss', back_loss)
-            self.loss = 0.5 * (for_loss + back_loss)
+
+        for_loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(softmax_w, softmax_b, for_targets, for_outputs,
+                                                             Config.train.sampled_num, Config.model.vocab_num))
+        tf.summary.scalar('for-loss', for_loss)
+        back_loss = tf.reduce_mean(tf.nn.sampled_softmax_loss(softmax_w, softmax_b, back_targets, back_outputs,
+                                                              Config.train.sampled_num, Config.model.vocab_num))
+        tf.summary.scalar('back-loss', back_loss)
+        self.loss = 0.5 * (for_loss + back_loss)
 
     def _build_train_op(self):
         global_step = tf.train.get_global_step()
