@@ -7,9 +7,6 @@ from model import Model
 from utils import Config
 
 
-# from hooks import PRFScoreHook
-
-
 def run(mode, run_config):
     model = Model()
     estimator = tf.estimator.Estimator(
