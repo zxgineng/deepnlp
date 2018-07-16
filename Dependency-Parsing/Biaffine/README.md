@@ -73,7 +73,7 @@ train:
 
 **Process raw data**
 
-Put data(.txt) in dataset_path  
+Put data(.conll) in dataset_path  
 Data must follow the format of example data  
 Put wordvec(.txt) in processed_path
 
