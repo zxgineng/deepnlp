@@ -63,8 +63,6 @@ if __name__ == '__main__':
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
     p = Predictor()
-    # words = '令 人 遗憾 的 是 , 他 至今 未 能 找到 令 自己 满意 的 答案 。'
-    # pos = 'VV NN VV DEC VC PU PN AD AD VV VV VV PN VV DEC NN PU'
     while True:
         text = input('input words (separated by space) -> ')
         text = strQ2B(text)
