@@ -8,9 +8,8 @@ class BeamSearchHook(tf.train.SessionRunHook):
     def __init__(self, inputs, targets):
         self.word_id = inputs['word_id']
         self.pos_id = inputs['pos_id']
-        self.dep_id = inputs['dep_id']
+        self.length = inputs['length']
         self.seq_labels = targets['seq_labels']
-        self.length = targets['length']
 
     def before_run(self, run_context):
         total_scores = run_context.sess.run('scores:0', {'word_id:0': self.word_id, 'pos_id:0': self.pos_id,
