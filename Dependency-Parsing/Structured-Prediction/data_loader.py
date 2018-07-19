@@ -17,7 +17,6 @@ ROOT = "<ROOT>"
 # punc_pos = ["''", "``", ":", ".", ","]
 
 
-
 def _int64_feature(value):
     if not isinstance(value, (list, tuple)):
         return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -28,7 +27,7 @@ def _int64_feature(value):
 class Token:
     def __init__(self, token_id, word, pos, dep, head_id):
         self.token_id = token_id
-        self.word = word.lower()
+        self.word = word
         self.pos = pos
         self.dep = dep
         self.head_id = head_id
@@ -57,12 +56,10 @@ class Token:
 
 NULL_TOKEN = Token(0, NULL, NULL, NULL, -1)
 ROOT_TOKEN = Token(0, ROOT, ROOT, ROOT, -1)
-UNK_TOKEN = Token(0, UNK, UNK, UNK, -1)
-
 
 
 class ArcStandardParser:
-    def __init__(self,tokens):
+    def __init__(self, tokens):
         self.Root = ROOT_TOKEN
         self.tokens = tokens
         self.buff = [token for token in self.tokens]
@@ -104,9 +101,9 @@ class ArcStandardParser:
         # dep features -> 12 (only children)
         dep_features.extend([token.dep for token in children_tokens])
 
-        word_input_ids = [word_vocab.get(word, word_vocab[UNK_TOKEN.word]) for word in word_features]
-        pos_input_ids = [pos_vocab.get(pos, pos_vocab[UNK_TOKEN.pos]) for pos in pos_features]
-        dep_input_ids = [dep_vocab.get(dep, dep_vocab[UNK_TOKEN.dep]) for dep in dep_features]
+        word_input_ids = [word_vocab.get(word, word_vocab[UNK]) for word in word_features]
+        pos_input_ids = [pos_vocab[pos] for pos in pos_features]
+        dep_input_ids = [dep_vocab[dep] for dep in dep_features]
 
         return [word_input_ids, pos_input_ids, dep_input_ids]  # 48 features
 
@@ -121,16 +118,16 @@ class ArcStandardParser:
                 rc0 = self.get_child_by_index_and_depth(self.stack[-i - 1], 0, "right", 1)
                 # the second token in the token.left_children
                 lc1 = self.get_child_by_index_and_depth(self.stack[-i - 1], 1, "left",
-                                                            1) if lc0 != NULL_TOKEN else NULL_TOKEN
+                                                        1) if lc0 != NULL_TOKEN else NULL_TOKEN
                 # the second token in the token.right_children
                 rc1 = self.get_child_by_index_and_depth(self.stack[-i - 1], 1, "right",
-                                                            1) if rc0 != NULL_TOKEN else NULL_TOKEN
+                                                        1) if rc0 != NULL_TOKEN else NULL_TOKEN
                 # the first token in the left_children of the first token in the token.left_children
                 llc0 = self.get_child_by_index_and_depth(self.stack[-i - 1], 0, "left",
-                                                             2) if lc0 != NULL_TOKEN else NULL_TOKEN
+                                                         2) if lc0 != NULL_TOKEN else NULL_TOKEN
                 # the first token in the right_children of the first token in the token.right_children
                 rrc0 = self.get_child_by_index_and_depth(self.stack[-i - 1], 0, "right",
-                                                             2) if rc0 != NULL_TOKEN else NULL_TOKEN
+                                                         2) if rc0 != NULL_TOKEN else NULL_TOKEN
 
                 children_tokens.extend([lc0, rc0, lc1, rc1, llc0, rrc0])
             else:
@@ -159,7 +156,7 @@ class ArcStandardParser:
         labels = [1] if len(self.buff) > 0 else [0]
         labels += ([1] if len(self.stack) > 2 else [0])
         labels += ([1] if len(self.stack) >= 2 else [0])
-        labels = [labels[0]] + labels[1:] * Config.data.num_dep
+        labels = [labels[0]] + labels[1:] * Config.model.dep_num
         return labels
 
     def get_transition_from_current_state(self, dep_dict):
@@ -236,7 +233,6 @@ class ArcStandardParser:
             head.right_children.sort()
 
 
-
 def get_tfrecord(name):
     tfrecords = []
     files = os.listdir(os.path.join(Config.data.processed_path, 'tfrecord/'))
@@ -253,7 +249,7 @@ def build_and_read_train(file):
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     pos_file = os.path.join(Config.data.processed_path, Config.data.pos_file)
     dep_file = os.path.join(Config.data.processed_path, Config.data.dep_file)
-    vocab, pos_tag, dep_tag = set(), set(), set()
+    vocab, pos, dep = set(), set(), set()
     sen = []
     total_sentences = []
 
@@ -264,8 +260,9 @@ def build_and_read_train(file):
                 line = strQ2B(line)
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 vocab.add(w)
-                pos_tag.add(p)
-                dep_tag.add(d)
+                pos.add(p)
+                if d != 'root':
+                    dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
                 total_sentences.append(sen)
@@ -276,9 +273,9 @@ def build_and_read_train(file):
     with open(vocab_file, 'w', encoding='utf8') as f:
         f.write('\n'.join([NULL, UNK, ROOT] + sorted(vocab)))
     with open(pos_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join([NULL, ROOT] + sorted(pos_tag)))
+        f.write('\n'.join([NULL, ROOT] + sorted(pos)))
     with open(dep_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(sorted(dep_tag)))
+        f.write('\n'.join(sorted(dep) + [NULL]))
 
     return total_sentences
 
@@ -377,19 +374,90 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
+def convert_to_example(word_id, pos_id, action_seq):
+    """convert one sample to example"""
+    data = {
+        'word_id': _int64_feature(word_id),
+        'pos_id': _int64_feature(pos_id),
+        'action_seq': _int64_feature(action_seq),
+        'length': _int64_feature(len(word_id))
+    }
+    features = tf.train.Features(feature=data)
+    example = tf.train.Example(features=features)
+    return example
+
+
+def preprocess(serialized):
+    def parse_tfrecord(serialized):
+        features = {
+            'word_id': tf.VarLenFeature(tf.int64),
+            'pos_id': tf.VarLenFeature(tf.int64),
+            'action_seq': tf.VarLenFeature(tf.int64),
+            'length': tf.FixedLenFeature([], tf.int64)
+        }
+        parsed_example = tf.parse_single_example(serialized=serialized, features=features)
+        word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])
+        pos_id = tf.sparse_tensor_to_dense(parsed_example['pos_id'])
+        arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
+        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
+        length = parsed_example['length']
+        return word_id, pos_id, arc, dep_id, length
+
+    return parse_tfrecord(serialized)
+
+
+def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
+    class IteratorInitializerHook(tf.train.SessionRunHook):
+
+        def __init__(self):
+            self.iterator_initializer_func = None
+
+        def after_create_session(self, session, coord):
+            self.iterator_initializer_func(session)
+
+    iterator_initializer_hook = IteratorInitializerHook()
+
+    def inputs():
+        with tf.name_scope(scope):
+            input_placeholder = tf.placeholder(tf.string)
+            dataset = tf.data.TFRecordDataset(input_placeholder)
+            dataset = dataset.map(preprocess)
+
+            if scope == "train":
+                dataset = dataset.repeat(None)  # Infinite iterations
+            else:
+                dataset = dataset.repeat(1)  # 1 Epoch
+            dataset = dataset.shuffle(buffer_size=buffer_size)
+            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], []))
+            iterator = dataset.make_initializable_iterator()
+            next_batch = iterator.get_next()
+            word_id = next_batch[0]
+            pos_id = next_batch[1]
+            arc = next_batch[2]
+            dep_id = next_batch[3]
+            length = next_batch[4]
+
+            iterator_initializer_hook.iterator_initializer_func = \
+                lambda sess: sess.run(
+                    iterator.initializer,
+                    feed_dict={input_placeholder: np.random.permutation(data)})
+
+            return {'word_id': word_id, 'pos_id': pos_id, 'length': length}, {'arc': arc, 'dep_id': dep_id}
+
+    return inputs, iterator_initializer_hook
+
+
 def create_tfrecord():
     train_file = os.path.join(Config.data.dataset_path, Config.data.train_data)
     train_data = build_and_read_train(train_file)
     test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
     test_data = read_test(test_file)
-    build_wordvec_pkl()
+    # build_wordvec_pkl()
     vocab = load_vocab()
     pos_dict = load_pos()
     dep_dict = load_dep()
 
-    if len(pos_dict) != Config.model.pos_num:
-        raise ValueError('length of pos dict must be as same as pos_num')
-    if len(dep_dict) != Config.model.dep_num:
+    if len(dep_dict)-1 != Config.model.dep_num:
         raise ValueError('length of dep dict must be as same as dep_num')
 
     if not os.path.exists(os.path.join(Config.data.processed_path, 'tfrecord')):
@@ -408,11 +476,15 @@ def create_tfrecord():
             with tf.python_io.TFRecordWriter(tf_file) as tfrecord_writer:
                 j = 0
                 while i < len(data):
-                    sys.stdout.write('\r>> converting %d/%d' % (i + 1, len(sen)))
+                    sys.stdout.write('\r>> converting %d/%d' % (i + 1, len(data)))
                     sys.stdout.flush()
                     parser = ArcStandardParser(data[i])
+                    action_seq = []
+                    word_id = word2id([t.word for t in parser.tokens], vocab)
+                    pos_id = pos2id([t.pos for t in parser.tokens], pos_dict)
                     num_word = len(parser.tokens)
-                    for _ in range(num_word * 2):
+
+                    for _ in range(num_word * 2 - 1):
                         legal_labels = parser.get_legal_labels()
                         curr_transition = parser.get_transition_from_current_state(dep_dict)
                         # non-projective
@@ -421,14 +493,17 @@ def create_tfrecord():
                         assert legal_labels[curr_transition] == 1
                         # update left/right children
                         if curr_transition != 0:
-                            sentence.update_child_dependencies(curr_transition)
+                            parser.update_child_dependencies(curr_transition)
                         # update stack
-                        sentence.update_state_by_transition(curr_transition)
+                        parser.update_state_by_transition(curr_transition)
+                        action_seq.append(curr_transition)
 
-                    serialized = example.SerializeToString()
-                    tfrecord_writer.write(serialized)
                     i += 1
-                    j += 1
+                    if len(action_seq) == num_word * 2 - 1:
+                        example = convert_to_example(word_id, pos_id, action_seq)
+                        serialized = example.SerializeToString()
+                        tfrecord_writer.write(serialized)
+                        j += 1
                     if j >= 5000 and data == train_data:  # totally shuffled
                         break
                 fidx += 1
