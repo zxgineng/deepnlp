@@ -44,54 +44,35 @@ class BeamTrainHook(tf.train.SessionRunHook):
             assert (len(batch_legal_labels),len(batch_legal_labels[0])) == batch_action_scores.shape
 
             for i in range(batch_size):
-                if not beam_path[i]:
-                    for j, s in enumerate(batch_action_scores[i]):
-                        if batch_legal_labels[i][j] != 0:
-                            beam_path[i].append([s, [j], [(batch_word_id[i], batch_pos_id[i], batch_dep_id[i])]])
-                    beam_path[i] = sorted(beam_path[i], key=lambda x: -x[0])[:Config.model.beam_size]
-                else:
-                    temp = []
-                    for prev in beam_path[i]:
+                if i not in stop_id:
+                    if not beam_path[i]:
                         for j, s in enumerate(batch_action_scores[i]):
                             if batch_legal_labels[i][j] != 0:
-                                temp.append([prev[0] + s, prev[1] + [j],
-                                             prev[3] + [(batch_word_id[i], batch_pos_id[i], batch_dep_id[i])]])
-                    beam_path[i] = sorted(temp, key=lambda x: -x[0])[:Config.model.beam_size]
+                                beam_path[i].append([s, [j], [(batch_word_id[i], batch_pos_id[i], batch_dep_id[i])]])
+                        beam_path[i] = sorted(beam_path[i], key=lambda x: -x[0])[:Config.model.beam_size]
+                    else:
+                        temp = []
+                        for prev in beam_path[i]:
+                            for j, s in enumerate(batch_action_scores[i]):
+                                if batch_legal_labels[i][j] != 0:
+                                    temp.append([prev[0] + s, prev[1] + [j],
+                                                 prev[3] + [(batch_word_id[i], batch_pos_id[i], batch_dep_id[i])]])
 
-                    if self.action_seq[i,:a_step + 1] not in [path[1] for path in beam_path[i]]:
-                        stop_id.append(i)
-                        beam_path[i] = [[0, self.action_seq[i,:a_step + 1], gold_inputs_seq]] + beam_path[i][1:]
+                        temp = sorted(temp, key=lambda x: -x[0])
+                        gold = [(n,path) for n,path in enumerate(temp) if path[1]==self.action_seq[i,:a_step + 1]]
+                        assert len(gold) <= 1, 'find %d gold'% len(gold)
+
+                        if gold[0][0] >= Config.model.beam_size:
+                            stop_id.append(i)
+                            beam_path[i] = [gold[0][1]] + temp[:Config.model.beam_size-1]
+                        elif a_step == 2*length[i] - 1:
+                            stop_id.append(i)
+                            temp.pop(gold[0][0])
+                            beam_path[i] = [gold[0][1]] + temp[:Config.model.beam_size-1]
+            if stop_id == list(range(batch_size)):
+                break
 
 
 
 
 
-        early_stop_id = []  # todo 用一个和length样式一样的转为mask
-        for a in range(max(2 * max(self.length) - 1)):
-            for i in range(batch_size):
-                if i in early_stop_id:
-                    pass
-                    # todo 加0？
-
-                if not beam_path[i]:
-                    for j, s in enumerate(total_scores[i]):
-                        beam_path[i].append([s, [j], [(self.word_id[i], self.pos_id[i], self.dep_id[i])]])
-                    beam_path[i] = sorted(beam_path[i], key=lambda x: -x[0])[:Config.model.beam_size]
-                else:
-                    temp = []
-                    for prev in beam_path[i]:
-                        for j, s in enumerate(total_scores[i]):
-                            if self.seq_labels[i][:a + 1] == prev[1] + [j]:
-                                gold_inputs_seq = prev[3] + [(self.word_id[i], self.pos_id[i], self.dep_id[i])]
-                            temp.append([prev[0] + s, prev[1] + [j],
-                                         prev[3] + [(self.word_id[i], self.pos_id[i], self.dep_id[i])]])
-
-                    beam_path[i] = sorted(temp, key=lambda x: -x[0])[:Config.model.beam_size]
-
-                    if self.seq_labels[i][:a + 1][:self.length[i]] not in [p[1] for p in beam_path[i]]:
-                        early_stop_id.append(i)
-                        beam_path[i] = [[0, self.seq_labels[i][:a + 1], gold_inputs_seq]] + beam_path[i][1:]
-
-                        # todo 之后怎么并行运算?
-
-                        # transition
