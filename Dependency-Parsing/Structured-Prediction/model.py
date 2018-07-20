@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import BeamSearchHook
+from hooks import BeamTrainHook
 
 
 class Model:
@@ -30,67 +30,68 @@ class Model:
 
     def build_graph(self):
         graph = Graph(self.mode)
-        inputs_ph = {'word_id': tf.placeholder(tf.int64, [None, Config.model.word_feature_num], 'word_id'),
-                     'pos_id': tf.placeholder(tf.int64, [None, Config.model.pos_feature_num], 'pos_id'),
-                     'dep_id': tf.placeholder(tf.int64, [None, Config.model.dep_feature_num], 'dep_id')}
-        logits = graph.build(inputs_ph)
-        tf.identity(logits, 'scores')
-        self.training_hooks = [BeamSearchHook(self.inputs, self.targets)]
 
         seg_id = tf.placeholder(tf.int64, [None], 'seg_id')
         beam_search_word = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.word_feature_num],
                                           'beam_search_word')
         beam_search_pos = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.pos_feature_num],
                                          'beam_search_pos')
-        beam_search_dep = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.pos_feature_num],
+        beam_search_dep = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.dep_feature_num],
                                          'beam_search_dep')
-        beam_search_label = tf.placeholder(tf.int64,[Config.model.beam_size,None])
+        beam_search_label = tf.placeholder(tf.int64, [Config.model.beam_size, None])
 
-        action_num = Config.model.dep_num * 2 + 1
+        action_num = (Config.model.dep_num - 2) * 2 + 1  # exclude null and root
 
-        all_scores = [[]]
+        all_scores = tf.constant([],tf.float32)
 
-        def condition(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep,beam_search_label,all_scores):
-            return tf.less(seg_id.shape[0] - 1, i)
+        def condition(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores):
+            return tf.less(tf.shape(seg_id)[0] - 1, i)
 
-        def body(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep,beam_search_label,all_scores):
-            inputs = {'word_id': tf.reshape(beam_search_word[:, seg_id[i]:seg_id[i + 1], :],
-                                            [-1, Config.model.word_feature_num]),
-                      'pos_id': tf.reshape(beam_search_pos[:, seg_id[i]:seg_id[i + 1], :],
-                                           [-1, Config.model.pos_feature_num]),
-                      'dep_id': tf.reshape(beam_search_dep[:, seg_id[i]:seg_id[i + 1], :],
-                                           [-1, Config.model.dep_feature_num])}
+        def body(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores):
+            inputs = {'word_feature_id': tf.reshape(beam_search_word[:, seg_id[i]:seg_id[i + 1], :],
+                                                    [-1, Config.model.word_feature_num], 'word_feature_id'),
+                      'pos_feature_id': tf.reshape(beam_search_pos[:, seg_id[i]:seg_id[i + 1], :],
+                                                   [-1, Config.model.pos_feature_num], 'pos_feature_id'),
+                      'dep_feature_id': tf.reshape(beam_search_dep[:, seg_id[i]:seg_id[i + 1], :],
+                                                   [-1, Config.model.dep_feature_num], 'dep_feature_id')}
             logits = graph.build(inputs)
-            logits = tf.reshape(logits,[Config.model.beam_size,seg_id[i + 1]-seg_id[i],action_num])
-            beam_search_label = beam_search_label[:,seg_id[i]:seg_id[i + 1]]
-            one_sample_socres = tf.reduce_sum(tf.multiply(tf.one_hot(beam_search_label,seg_id[i + 1]-seg_id[i]),logits),[-1,-2])
-            all_scores = tf.concat([all_scores,one_sample_socres],-1)
 
-            return [i + 1, seg_id, beam_search_word, beam_search_pos, beam_search_dep,beam_search_label,all_scores]
+            logits = tf.reshape(logits, [Config.model.beam_size, -1, action_num])
+            beam_search_label = beam_search_label[:, seg_id[i]:seg_id[i + 1]]
+            one_sample_socres = tf.reduce_sum(
+                tf.multiply(tf.one_hot(beam_search_label, action_num), logits), [-1, -2])
+
+            all_scores = tf.concat([all_scores, one_sample_socres], -1)
+
+
+            return [i + 1, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores]
 
         i = 0
-        [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores] =\
-            tf.while_loop(condition, body, [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep,beam_search_label,all_scores])
+        [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores] = \
+            tf.while_loop(condition, body,
+                          [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label,all_scores],
+                          [tf.TensorShape(None),seg_id.get_shape(),beam_search_word.get_shape(),beam_search_pos.get_shape(),
+                           beam_search_dep.get_shape(),beam_search_label.get_shape(),tf.TensorShape([None])])
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(all_scores)
             self._build_train_op()
+            self.training_hooks = [BeamTrainHook(self.inputs, self.targets)]
 
     def _build_loss(self, logits):
-        labels = tf.zeros_like(logits,tf.int64)[:,0]
-        tf.losses.sparse_softmax_cross_entropy(labels=labels,logits=logits)
-        self.loss = tf.losses.get_total_loss()
+        logits = tf.reshape(logits,[-1,Config.model.beam_size])
+        labels = tf.zeros_like(logits, tf.int64)[:, 0]
+        loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+        # todo 正则
+        reg_loss  = Config.model.reg_scale * tf.reduce_sum([tf.nn.l2_loss(v) for v in tf.trainable_variables('fully_connected') if 'biases' not in v.name])
+        self.loss = loss + reg_loss
 
     def _build_train_op(self):
+        # todo 写完整
         global_step = tf.train.get_global_step()
-
-        if Config.train.epoch <= 10:
-            learning_rate = Config.train.initial_lr
-        else:
-            learning_rate = Config.train.initial_lr * 0.1
+        learning_rate = Config.train.initial_lr
 
         self.train_op = slim.optimize_loss(
             self.loss, global_step,
             optimizer=tf.train.MomentumOptimizer(learning_rate, 0.9),
-            learning_rate=learning_rate,
-            clip_gradients=Config.train.max_gradient_norm)
+            learning_rate=learning_rate)

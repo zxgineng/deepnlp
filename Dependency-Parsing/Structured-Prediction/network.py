@@ -14,9 +14,9 @@ class Graph:
             self.is_training = False
 
     def build(self, inputs):
-        word_id = inputs['word_id']
-        pos_id = inputs['pos_id']
-        dep_id = inputs['dep_id']
+        word_id = inputs['word_feature_id']
+        pos_id = inputs['pos_feature_id']
+        dep_id = inputs['dep_feature_id']
         net = self._embedding(word_id, pos_id, dep_id)
         net = self._cube_activation(net)
         logits = self._fc_layer(net)
@@ -34,7 +34,7 @@ class Graph:
         embedding = tf.get_variable('dep_embedding',[Config.model.dep_num, Config.model.dep_embedding_size])
         dep_embedding = tf.nn.embedding_lookup(embedding, dep_id)
 
-        outputs = tf.concat([word_embedding, pos_embedding,dep_embedding], -1)
+        outputs = tf.concat([slim.flatten(word_embedding), slim.flatten(pos_embedding),slim.flatten(dep_embedding)], -1)
         return outputs
 
 
@@ -45,6 +45,5 @@ class Graph:
         return outputs
 
     def _fc_layer(self, inputs):
-        logits = slim.fully_connected(inputs, Config.model.dep_num * 2 + 1, activation_fn=None,
-                                      weights_regularizer=slim.l2_regularizer(Config.model.reg_scale))
+        logits = slim.fully_connected(inputs, (Config.model.dep_num - 2) * 2 + 1, activation_fn=None)
         return logits
