@@ -31,6 +31,12 @@ class Model:
     def build_graph(self):
         graph = Graph(self.mode)
 
+        inputs = {'word_feature_id': tf.placeholder(tf.int64,[None,Config.model.word_feature_num],'word_feature_id'),
+                  'pos_feature_id': tf.placeholder(tf.int64,[None,Config.model.pos_feature_num],'pos_feature_id'),
+                  'dep_feature_id': tf.placeholder(tf.int64,[None,Config.model.dep_feature_num],'dep_feature_id')}
+        logits = graph.build(inputs)
+        tf.identity(logits, 'scores')
+
         seg_id = tf.placeholder(tf.int64, [None], 'seg_id')
         beam_search_word = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.word_feature_num],
                                           'beam_search_word')
@@ -38,43 +44,45 @@ class Model:
                                          'beam_search_pos')
         beam_search_dep = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.dep_feature_num],
                                          'beam_search_dep')
-        beam_search_label = tf.placeholder(tf.int64, [Config.model.beam_size, None])
+        beam_search_action = tf.placeholder(tf.int64, [Config.model.beam_size, None],'beam_search_action')
 
         action_num = (Config.model.dep_num - 2) * 2 + 1  # exclude null and root
 
         all_scores = tf.constant([],tf.float32)
 
-        def condition(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores):
-            return tf.less(tf.shape(seg_id)[0] - 1, i)
+        def condition(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action, scores):
+            return tf.less(i,tf.shape(seg_id)[0] - 1)
 
-        def body(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores):
+        def body(i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action, scores):
             inputs = {'word_feature_id': tf.reshape(beam_search_word[:, seg_id[i]:seg_id[i + 1], :],
-                                                    [-1, Config.model.word_feature_num], 'word_feature_id'),
+                                                    [-1, Config.model.word_feature_num]),
                       'pos_feature_id': tf.reshape(beam_search_pos[:, seg_id[i]:seg_id[i + 1], :],
-                                                   [-1, Config.model.pos_feature_num], 'pos_feature_id'),
+                                                   [-1, Config.model.pos_feature_num]),
                       'dep_feature_id': tf.reshape(beam_search_dep[:, seg_id[i]:seg_id[i + 1], :],
-                                                   [-1, Config.model.dep_feature_num], 'dep_feature_id')}
+                                                   [-1, Config.model.dep_feature_num])}
+
             logits = graph.build(inputs)
 
             logits = tf.reshape(logits, [Config.model.beam_size, -1, action_num])
-            beam_search_label = beam_search_label[:, seg_id[i]:seg_id[i + 1]]
-            one_sample_socres = tf.reduce_sum(
-                tf.multiply(tf.one_hot(beam_search_label, action_num), logits), [-1, -2])
 
-            all_scores = tf.concat([all_scores, one_sample_socres], -1)
+            beam_search_action = beam_search_action[:, seg_id[i]:seg_id[i + 1]]
+            one_sample_scores = tf.reduce_sum(
+                tf.multiply(tf.one_hot(beam_search_action, action_num), logits), [-1, -2])
+
+            scores = tf.concat([scores, one_sample_scores], -1)
 
 
-            return [i + 1, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores]
+            return [i + 1, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action, scores]
 
         i = 0
-        [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label, all_scores] = \
+        [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action, scores] = \
             tf.while_loop(condition, body,
-                          [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_label,all_scores],
+                          [i, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action,all_scores],
                           [tf.TensorShape(None),seg_id.get_shape(),beam_search_word.get_shape(),beam_search_pos.get_shape(),
-                           beam_search_dep.get_shape(),beam_search_label.get_shape(),tf.TensorShape([None])])
+                           beam_search_dep.get_shape(),beam_search_action.get_shape(),tf.TensorShape([None])])
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
-            self._build_loss(all_scores)
+            self._build_loss(scores)
             self._build_train_op()
             self.training_hooks = [BeamTrainHook(self.inputs, self.targets)]
 

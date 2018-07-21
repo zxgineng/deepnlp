@@ -1,6 +1,6 @@
 data:
-  dataset_path: 'D:/data/dataset/structured-prediction/'
-  processed_path: 'D:/data/processed-data/structured-prediction/'
+  dataset_path: '~/data/dataset/nlp/dependency-parsing/'
+  processed_path: '~/data/processed-data/nlp/dependency-parsing/structured-prediction/'
 
   train_data: 'train.conll'
   test_data: 'test.conll'
@@ -29,11 +29,11 @@ model:
   dep_embedding_size: 100
 
 train:
-  batch_size: 10
+  batch_size: 3
   initial_lr: 0.001
 
   epoch: 0
   max_epoch: 15
 
-  model_dir: 'D:/data/logs/structured-prediction/'
+  model_dir: '~/data/logs/nlp/dependency-parsing/structured-prediction/'
   save_checkpoints_steps: 2000

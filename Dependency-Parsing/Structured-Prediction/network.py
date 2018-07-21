@@ -14,13 +14,14 @@ class Graph:
             self.is_training = False
 
     def build(self, inputs):
-        word_id = inputs['word_feature_id']
-        pos_id = inputs['pos_feature_id']
-        dep_id = inputs['dep_feature_id']
-        net = self._embedding(word_id, pos_id, dep_id)
-        net = self._cube_activation(net)
-        logits = self._fc_layer(net)
-        return logits
+        with tf.variable_scope('network',reuse=tf.AUTO_REUSE):
+            word_id = inputs['word_feature_id']
+            pos_id = inputs['pos_feature_id']
+            dep_id = inputs['dep_feature_id']
+            net = self._embedding(word_id, pos_id, dep_id)
+            net = self._cube_activation(net)
+            logits = self._fc_layer(net)
+            return logits
 
     def _embedding(self, word_id, pos_id, dep_id):
         wordvec = load_pretrained_vec()
