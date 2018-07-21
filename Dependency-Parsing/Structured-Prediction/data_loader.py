@@ -127,7 +127,7 @@ class ArcStandardParser:
     def extract_for_current_state(self, sentence, word_vocab, pos_vocab, dep_vocab):
         """cal direct_tokens and children_tokens to combine current state"""
         direct_tokens = self.extract_from_stack_and_buffer(sentence, Config.data.num_stack_word)  # 6 tokens
-        children_tokens = self.extract_children_from_stack(sentence,Config.data.children_stack_range)  # 12 tokens
+        children_tokens = self.extract_children_from_stack(sentence, Config.data.children_stack_range)  # 12 tokens
 
         word_features = []
         pos_features = []
@@ -287,8 +287,10 @@ def build_and_read_train(file):
                     dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                total_sentences.append(Sentence(sen))
+                if len(sen) > 1:
+                    total_sentences.append(Sentence(sen))
                 sen = []
+
         if len(sen) > 0:
             total_sentences.append(Sentence(sen))
 
@@ -313,7 +315,8 @@ def read_test(file):
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                total_sentences.append(Sentence(sen))
+                if len(sen) > 1:
+                    total_sentences.append(Sentence(sen))
                 sen = []
         if len(sen) > 0:
             total_sentences.append(Sentence(sen))

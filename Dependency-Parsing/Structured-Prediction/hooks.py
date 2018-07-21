@@ -117,7 +117,6 @@ class BeamTrainHook(tf.train.SessionRunHook):
         beam_search_pos = beam_search_pos[:,1:,:]
         beam_search_dep = beam_search_dep[:,1:,:]
         beam_search_action = beam_search_action[:,1:]
-        print(seg_id)
 
         return tf.train.SessionRunArgs(self.no_op,{'beam_search_word:0':beam_search_word,
                                                    'beam_search_pos:0':beam_search_pos,

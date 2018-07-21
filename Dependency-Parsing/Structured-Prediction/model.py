@@ -38,6 +38,7 @@ class Model:
         tf.identity(logits, 'scores')
 
         seg_id = tf.placeholder(tf.int64, [None], 'seg_id')
+        # seg_id = tf.constant([0,4,8],tf.int64)
         beam_search_word = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.word_feature_num],
                                           'beam_search_word')
         beam_search_pos = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.pos_feature_num],
@@ -65,12 +66,11 @@ class Model:
 
             logits = tf.reshape(logits, [Config.model.beam_size, -1, action_num])
 
-            beam_search_action = beam_search_action[:, seg_id[i]:seg_id[i + 1]]
+            action = beam_search_action[:, seg_id[i]:seg_id[i + 1]]
             one_sample_scores = tf.reduce_sum(
-                tf.multiply(tf.one_hot(beam_search_action, action_num), logits), [-1, -2])
+                tf.multiply(tf.one_hot(action, action_num), logits), [-1, -2])
 
             scores = tf.concat([scores, one_sample_scores], -1)
-
 
             return [i + 1, seg_id, beam_search_word, beam_search_pos, beam_search_dep, beam_search_action, scores]
 

@@ -15,7 +15,7 @@ def run(mode, run_config):
         config=run_config)
 
     if mode == 'train':
-        logginghook = tf.train.LoggingTensorHook({'logits': "Reshape:0"}, every_n_iter=1)
+        logginghook = tf.train.LoggingTensorHook({'logits': "while/Exit_6:0"}, every_n_iter=1)
 
 
         train_data = data_loader.get_tfrecord('train')
