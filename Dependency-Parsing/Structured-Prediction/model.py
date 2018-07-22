@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import BeamTrainHook
+from hooks import BeamSearchHook
 
 
 class Model:
@@ -14,7 +14,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions, self.training_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.training_hooks,self.evaluation_hooks = None, None, None, None,None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -26,7 +26,8 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             predictions=self.predictions,
-            training_hooks=self.training_hooks)
+            training_hooks=self.training_hooks,
+            evaluation_hooks=self.evaluation_hooks)
 
     def build_graph(self):
         graph = Graph(self.mode)
@@ -38,7 +39,7 @@ class Model:
         tf.identity(logits, 'scores')
 
         seg_id = tf.placeholder(tf.int64, [None], 'seg_id')
-        # seg_id = tf.constant([0,4,8],tf.int64)
+
         beam_search_word = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.word_feature_num],
                                           'beam_search_word')
         beam_search_pos = tf.placeholder(tf.int64, [Config.model.beam_size, None, Config.model.pos_feature_num],
@@ -47,7 +48,7 @@ class Model:
                                          'beam_search_dep')
         beam_search_action = tf.placeholder(tf.int64, [Config.model.beam_size, None],'beam_search_action')
 
-        action_num = (Config.model.dep_num - 2) * 2 + 1  # exclude null and root
+        action_num = (Config.model.dep_num - 1) * 2 + 1  # exclude null and root
 
         all_scores = tf.constant([],tf.float32)
 
@@ -83,23 +84,28 @@ class Model:
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(scores)
-            self._build_train_op()
-            self.training_hooks = [BeamTrainHook(self.inputs, self.targets)]
+            if self.mode == tf.estimator.ModeKeys.TRAIN:
+                self._build_train_op()
+                self.training_hooks = [BeamSearchHook(self.inputs, self.targets,'train')]
+            else:
+                head_acc = tf.placeholder(tf.float32, None, 'head_ph')
+                dep_acc = tf.placeholder(tf.float32, None, 'dep_ph')
+                tf.summary.scalar('UAS', head_acc, ['acc'], 'score')
+                tf.summary.scalar('LAS', dep_acc, ['acc'], 'score')
+                self.evaluation_hooks = [BeamSearchHook(self.inputs, self.targets,'eval')]
 
     def _build_loss(self, logits):
         logits = tf.reshape(logits,[-1,Config.model.beam_size])
         labels = tf.zeros_like(logits, tf.int64)[:, 0]
         loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-        # todo 正则
-        reg_loss  = Config.model.reg_scale * tf.reduce_sum([tf.nn.l2_loss(v) for v in tf.trainable_variables('fully_connected') if 'biases' not in v.name])
+        reg_loss  = Config.train.reg_scale * tf.reduce_sum([tf.nn.l2_loss(v) for v in tf.trainable_variables()])
         self.loss = loss + reg_loss
 
     def _build_train_op(self):
-        # todo 写完整
         global_step = tf.train.get_global_step()
         learning_rate = Config.train.initial_lr
 
         self.train_op = slim.optimize_loss(
             self.loss, global_step,
-            optimizer=tf.train.MomentumOptimizer(learning_rate, 0.9),
+            optimizer=tf.train.AdagradOptimizer(learning_rate),
             learning_rate=learning_rate)

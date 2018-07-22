@@ -46,5 +46,5 @@ class Graph:
         return outputs
 
     def _fc_layer(self, inputs):
-        logits = slim.fully_connected(inputs, (Config.model.dep_num - 2) * 2 + 1, activation_fn=None)
+        logits = slim.fully_connected(inputs, (Config.model.dep_num - 1) * 2 + 1, activation_fn=None)
         return logits

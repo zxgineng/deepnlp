@@ -34,7 +34,7 @@ class Token:
         self.pos = pos
         self.dep = dep
         self.head_id = head_id
-        self.predicted_head_id = None
+        # self.predicted_head_id = None
         self.left_children = list()
         self.right_children = list()
 
@@ -67,13 +67,13 @@ class Sentence:
         self.tokens = tokens
         self.buff = [token for token in self.tokens]
         self.stack = [self.Root]
-        self.dependencies = []
-        self.predicted_dependencies = []
+        # self.dependencies = []
+        # self.predicted_dependencies = []
         # for beam search
         self.bs_score = 0
         self.bs_action_seq = []
         self.bs_input_seq = []
-        self.bs_next_legal_action = None
+        self.bs_legal_transitions = None
 
     def new_branch(self, score, action, inputs):
         new = copy.deepcopy(self)
@@ -82,8 +82,8 @@ class Sentence:
         new.bs_input_seq.append(inputs)
         return new
 
-    def clear_prediction_dependencies(self):
-        self.predicted_dependencies = []
+    # def clear_prediction_dependencies(self):
+    #     self.predicted_dependencies = []
 
     def clear_children_info(self):
         for token in self.tokens:
@@ -108,7 +108,10 @@ class Sentence:
 
 class ArcStandardParser:
     def __init__(self):
-        pass
+        self.vocab = load_vocab()
+        self.pos_dict = load_pos()
+        self.dep_dict = load_dep()
+        self.id2dep = {i: t for i, t in enumerate(self.dep_dict)}
 
     def extract_from_stack_and_buffer(self, sentence, num_word=3):
         """extract the last 3 tokens in the stack and the first 3 tokens in the buff, concat them as direct_tokens"""
@@ -124,7 +127,7 @@ class ArcStandardParser:
         # return a list of 6 tokens
         return tokens
 
-    def extract_for_current_state(self, sentence, word_vocab, pos_vocab, dep_vocab):
+    def extract_for_current_state(self, sentence):
         """cal direct_tokens and children_tokens to combine current state"""
         direct_tokens = self.extract_from_stack_and_buffer(sentence, Config.data.num_stack_word)  # 6 tokens
         children_tokens = self.extract_children_from_stack(sentence, Config.data.children_stack_range)  # 12 tokens
@@ -144,9 +147,9 @@ class ArcStandardParser:
         # dep features -> 12 (only children)
         dep_features.extend([token.dep for token in children_tokens])
 
-        word_input_ids = [word_vocab.get(word, word_vocab[UNK]) for word in word_features]
-        pos_input_ids = [pos_vocab[pos] for pos in pos_features]
-        dep_input_ids = [dep_vocab[dep] for dep in dep_features]
+        word_input_ids = [self.vocab.get(word, self.vocab[UNK]) for word in word_features]
+        pos_input_ids = [self.pos_dict[pos] for pos in pos_features]
+        dep_input_ids = [self.dep_dict[dep] for dep in dep_features]
 
         return [word_input_ids, pos_input_ids, dep_input_ids]  # 48 features
 
@@ -186,73 +189,72 @@ class ArcStandardParser:
         if direction == "left":
             if len(token.left_children) > index:
                 return self.get_child_by_index_and_depth(sentence,
-                                                         sentence.tokens[token.left_children[index] - 1], index,
+                                                         token.left_children[index], index,
                                                          direction, depth - 1)
             return NULL_TOKEN
         else:
             if len(token.right_children) > index:
                 return self.get_child_by_index_and_depth(sentence,
-                                                         sentence.tokens[token.right_children[::-1][index] - 1], index,
+                                                         token.right_children[::-1][index], index,
                                                          direction, depth - 1)
             return NULL_TOKEN
 
-    def get_legal_labels(self, sentence):
+    def get_legal_transitions(self, sentence):
         """check legality of shift, left arc, right arc"""
-        labels = [1] if len(sentence.buff) > 0 else [0]
-        labels += ([1] if len(sentence.stack) > 2 else [0])
-        labels += ([1] if len(sentence.stack) >= 2 else [0])
-        labels = [labels[0]] + labels[1:] * (Config.model.dep_num - 2)  # exclude NULL and root in dep dict
-        return labels
+        transitions = [1] if len(sentence.buff) > 0 else [0]
+        transitions += ([1] if len(sentence.stack) > 2 else [0])
+        transitions += ([1] if len(sentence.stack) >= 2 else [0])
+        transitions = [transitions[0]] + transitions[1:] * (Config.model.dep_num - 1)  # exclude NULL
+        return transitions
 
-    def get_transition_from_current_state(self, sentence, dep_dict):
+    def get_oracle_from_current_state(self, sentence):
         """get transition according to stack0 and stack1"""
         if len(sentence.stack) < 2:
             return 0  # shift
 
         stack_token_0 = sentence.stack[-1]
         stack_token_1 = sentence.stack[-2]
-        if stack_token_1.token_id >= 1 and stack_token_1.head_id == stack_token_0.token_id:
-            return dep_dict[stack_token_1.dep] * 2 + 1  # left arc
-        elif stack_token_1.token_id >= 0 and stack_token_0.head_id == stack_token_1.token_id \
-                and stack_token_0.token_id not in map(lambda x: x.head_id, sentence.buff):
-            return dep_dict[stack_token_0.dep] * 2 + 2  # right arc
+        # σ[0] is head of σ[1] and all childs of σ[1] are attached to it and σ[1] is not the root
+        buff_head = [token.head_id for token in sentence.buff]
+        if stack_token_1.token_id != 0 and stack_token_1.head_id == stack_token_0.token_id \
+                and stack_token_1.token_id not in buff_head:
+            return self.dep_dict[stack_token_1.dep] * 2 +1 # left arc
+        # σ[1] is head of σ[0] and all childs of σ[0] are attached to it and σ[0] is not the root
+        elif stack_token_0.head_id == stack_token_1.token_id and stack_token_0.token_id not in buff_head:
+            return self.dep_dict[stack_token_0.dep] * 2 + 2  # right arc
         else:
             return 0 if len(sentence.buff) != 0 else None
 
-    def update_state_by_transition(self, sentence, transition, gt=True):
+    def update_state_by_transition(self, sentence, transition):
         """updates stack, buffer and dependencies"""
         if transition is not None:
             if transition == 0:  # shift
                 sentence.stack.append(sentence.buff[0])
                 sentence.buff = sentence.buff[1:] if len(sentence.buff) > 1 else []
             elif transition % 2 == 1:  # left arc
-                # save in self.dependencies
-                sentence.dependencies.append(
-                    (sentence.stack[-1], sentence.stack[-2])) if gt else sentence.predicted_dependencies.append(
-                    (sentence.stack[-1], sentence.stack[-2], transition))
                 # del the children token
-                sentence.stack = sentence.stack[:-2] + sentence.stack[-1:]
+                sentence.stack.pop(-2)
             elif transition % 2 == 0:  # right arc
-                sentence.dependencies.append(
-                    (sentence.stack[-2], sentence.stack[-1])) if gt else sentence.predicted_dependencies.append(
-                    (sentence.stack[-2], sentence.stack[-1], transition))
-                sentence.stack = sentence.stack[:-1]
+                sentence.stack.pop(-1)
 
-    def update_child_dependencies(self, sentence, curr_transition):
+    def update_child_dependencies(self, sentence, transition):
         """update left/right children"""
-        if curr_transition % 2 == 1:
+        if transition % 2 == 1:
             head = sentence.stack[-1]
             dependent = sentence.stack[-2]
-        elif curr_transition % 2 == 0:
+        elif transition % 2 == 0:
             head = sentence.stack[-2]
             dependent = sentence.stack[-1]
 
+        dependent.head_id = head.token_id    # save arc
+        dependent.dep = self.id2dep[(transition-1)//2]    # save dep
+
         if head.token_id > dependent.token_id:
-            head.left_children.append(dependent.token_id)
-            head.left_children.sort()
+            head.left_children.append(dependent)
+            head.left_children.sort(key=lambda x: x.token_id)
         else:
-            head.right_children.append(dependent.token_id)
-            head.right_children.sort()
+            head.right_children.append(dependent)
+            head.right_children.sort(key=lambda x: x.token_id)
 
 
 def get_tfrecord(name):
@@ -283,8 +285,7 @@ def build_and_read_train(file):
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 vocab.add(w)
                 pos.add(p)
-                if d != 'root':
-                    dep.add(d)
+                dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
                 if len(sen) > 1:
@@ -299,7 +300,7 @@ def build_and_read_train(file):
     with open(pos_file, 'w', encoding='utf8') as f:
         f.write('\n'.join([NULL, ROOT] + sorted(pos)))
     with open(dep_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(sorted(dep) + [NULL, 'root']))
+        f.write('\n'.join(sorted(dep) + [NULL]))
 
     return total_sentences
 
@@ -399,13 +400,13 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_example(idx, word, pos, arc, dep, action_seq):
+def convert_to_example(idx, word, pos, arc, dep_id, action_seq):
     """convert one sample to example"""
     data = {
         'idx': _int64_feature(idx),
         'pos': _bytes_feature(pos),
         'arc': _int64_feature(arc),
-        'dep': _bytes_feature(dep),
+        'dep_id': _int64_feature(dep_id),
         'word': _bytes_feature(word),
         'action_seq': _int64_feature(action_seq),
         'length': _int64_feature(len(word))
@@ -422,7 +423,7 @@ def preprocess(serialized):
             'word': tf.VarLenFeature(tf.string),
             'pos': tf.VarLenFeature(tf.string),
             'arc': tf.VarLenFeature(tf.int64),
-            'dep': tf.VarLenFeature(tf.string),
+            'dep_id': tf.VarLenFeature(tf.int64),
             'action_seq': tf.VarLenFeature(tf.int64),
             'length': tf.FixedLenFeature([], tf.int64)
         }
@@ -431,10 +432,10 @@ def preprocess(serialized):
         word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
         pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
         arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
-        dep = tf.sparse_tensor_to_dense(parsed_example['dep'], default_value='')
+        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
         action_seq = tf.sparse_tensor_to_dense(parsed_example['action_seq'])
         length = parsed_example['length']
-        return idx, word, pos, arc, dep, action_seq, length
+        return idx, word, pos, arc, dep_id, action_seq, length
 
     return parse_tfrecord(serialized)
 
@@ -468,7 +469,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             word = next_batch[1]
             pos = next_batch[2]
             arc = next_batch[3]
-            dep = next_batch[4]
+            dep_id = next_batch[4]
             action_seq = next_batch[5]
             length = next_batch[6]
 
@@ -478,7 +479,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
             return {'idx': idx, 'word': word, 'pos': pos, 'length': length}, \
-                   {'action_seq': action_seq, 'arc': arc, 'dep': dep}
+                   {'action_seq': action_seq, 'arc': arc, 'dep_id': dep_id}
 
     return inputs, iterator_initializer_hook
 
@@ -522,28 +523,25 @@ def create_tfrecord():
                     word = [t.word.encode() for t in sen.tokens]
                     pos = [t.pos.encode() for t in sen.tokens]
                     arc = [t.head_id for t in sen.tokens]
-                    dep = [t.dep.encode() for t in sen.tokens]
+                    dep_id = dep2id([t.dep for t in sen.tokens],dep_dict)
 
                     num_word = len(sen.tokens)
 
-                    for _ in range(num_word * 2 - 1):
-                        legal_labels = parser.get_legal_labels(sen)
-                        curr_transition = parser.get_transition_from_current_state(sen, dep_dict)
+                    for _ in range(num_word * 2):
+                        legal_transitions = parser.get_legal_transitions(sen)
+                        transition = parser.get_oracle_from_current_state(sen)
                         # non-projective
-                        if curr_transition is None:
-                            print('\nno-projective!!')
+                        if transition is None:
+                            print('\nnon-projective!!')
                             break
-                        assert legal_labels[curr_transition] == 1
-                        # update left/right children
-                        if curr_transition != 0:
-                            parser.update_child_dependencies(sen, curr_transition)
+                        assert legal_transitions[transition] == 1
                         # update stack
-                        parser.update_state_by_transition(sen, curr_transition)
-                        action_seq.append(curr_transition)
+                        parser.update_state_by_transition(sen, transition)
+                        action_seq.append(transition)
 
                     i += 1
-                    if len(action_seq) == num_word * 2 - 1:
-                        example = convert_to_example(idx, word, pos, arc, dep, action_seq)
+                    if len(action_seq) == num_word * 2:
+                        example = convert_to_example(idx, word, pos, arc, dep_id, action_seq)
                         serialized = example.SerializeToString()
                         tfrecord_writer.write(serialized)
                         j += 1

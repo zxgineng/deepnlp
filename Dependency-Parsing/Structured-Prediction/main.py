@@ -15,8 +15,6 @@ def run(mode, run_config):
         config=run_config)
 
     if mode == 'train':
-        logginghook = tf.train.LoggingTensorHook({'logits': "while/Exit_6:0"}, every_n_iter=1)
-
 
         train_data = data_loader.get_tfrecord('train')
         val_data = data_loader.get_tfrecord('test')
@@ -32,7 +30,7 @@ def run(mode, run_config):
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            estimator.train(input_fn=train_input_fn, hooks=[logginghook,train_input_hook])
+            estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
             estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1
