@@ -8,6 +8,7 @@
 [Simple and Accurate Dependency Parsing Using Bidirectional LSTM Feature Representations](https://aclweb.org/anthology/Q16-1023) (2016. 7)  
 [Training with Exploration Improves a Greedy Stack LSTM Parser](https://arxiv.org/pdf/1603.03793.pdf) (2016. 3)     
 [A Neural Probabilistic Structured-Prediction Model for Transition-Based Dependency Parsing](http://www.aclweb.org/anthology/P15-1117) (2015. 7)  
+[Transition-Based Dependency Parsing with Stack Long Short-Term Memory](http://www.aclweb.org/anthology/P15-1033) (2015. 7)  
 [Structured Training for Neural Network Transition-Based Parsing](http://anthology.aclweb.org/P/P15/P15-1032.pdf) (2015. 7)  
 [A Fast and Accurate Dependency Parser using Neural Networks](https://cs.stanford.edu/~danqi/papers/emnlp2014.pdf) (2014. 8)  
 [Training Deterministic Parsers with Non-Deterministic Oracles](http://www.aclweb.org/anthology/Q13-1033) (2013. 10)  

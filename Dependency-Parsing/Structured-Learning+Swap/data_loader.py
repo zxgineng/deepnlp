@@ -4,7 +4,6 @@ import sys
 import numpy as np
 import tensorflow as tf
 import pickle
-import copy
 
 from utils import Config, strQ2B
 
@@ -37,6 +36,8 @@ class Token:
         # self.predicted_head_id = None
         self.left_children = list()
         self.right_children = list()
+        self.inorder_traversal_idx = None
+        self.swapped = list()  # prevent 2 same token being swapped more than once
 
     def is_root_token(self):
         if self.word == ROOT:
@@ -71,19 +72,53 @@ class Sentence:
         # self.predicted_dependencies = []
         # for beam search
         self.bs_score = 0
-        self.bs_action_seq = []
+        self.bs_ave_score = 0
+        self.bs_transition_seq = []
+        self.bs_tran_length = 0
         self.bs_input_seq = []
-        self.bs_legal_transitions = None
+        self.bs_legal_transition = None
+        self.terminate = False
+
+    def inorder_traversal(self):
+        """get inorder traversal index to convert non-projective to projective"""
+        node_dict = {token.token_id: token for token in self.tokens}
+        root = None
+        for token in self.tokens:
+            if token.head_id != 0:
+                head_token = node_dict[token.head_id]
+                if token.token_id < head_token.token_id:
+                    head_token.left_children.append(token)
+                else:
+                    head_token.right_children.append(token)
+            else:
+                root = token
+
+        def recurse(root, result):
+            """recurse to traverse"""
+            for n in root.left_children:
+                recurse(n, result)
+            result.append(root)
+            for n in root.right_children:
+                recurse(n, result)
+
+        result = []
+        assert root  # wrong data, no root
+        recurse(root, result)
+        assert len(result) == len(self.tokens)  # wrong data, multiple trees
+        for i, token in enumerate(result):
+            token.inorder_traversal_idx = i + 1
 
     def new_branch(self, score, action, inputs):
-        new = copy.deepcopy(self)
+        new = pickle.loads(pickle.dumps(self, -1))
         new.bs_score = new.bs_score + score
-        new.bs_action_seq.append(action)
+        new.bs_transition_seq.append(action)
         new.bs_input_seq.append(inputs)
+        new.bs_tran_length += 1
+        new.bs_ave_score = new.bs_score/len(new.bs_input_seq)
         return new
 
-    # def clear_prediction_dependencies(self):
-    #     self.predicted_dependencies = []
+    def clear_prediction_dependencies(self):
+        self.predicted_dependencies = []
 
     def clear_children_info(self):
         for token in self.tokens:
@@ -200,54 +235,59 @@ class ArcStandardParser:
             return NULL_TOKEN
 
     def get_legal_transitions(self, sentence):
-        """check legality of shift, left arc, right arc"""
+        """check legality of shift, swap, left reduce, right reduce"""
         transitions = [1] if len(sentence.buff) > 0 else [0]
+        transitions += [1] if len(sentence.stack) > 2 and sentence.stack[-1] not in sentence.stack[-2].swapped else [0]
         transitions += ([1] if len(sentence.stack) > 2 else [0])
         transitions += ([1] if len(sentence.stack) >= 2 else [0])
-        transitions = [transitions[0]] + transitions[1:] * (Config.model.dep_num - 1)  # exclude NULL
+        transitions = transitions[:2] + transitions[2:] * (Config.model.dep_num - 1)  # exclude NULL in dep dict
         return transitions
 
     def get_oracle_from_current_state(self, sentence):
-        """get transition according to stack0 and stack1"""
+        """get oracle according to current state"""
         if len(sentence.stack) < 2:
             return 0  # shift
 
         stack_token_0 = sentence.stack[-1]
         stack_token_1 = sentence.stack[-2]
-        # σ[0] is head of σ[1] and all childs of σ[1] are attached to it and σ[1] is not the root
         buff_head = [token.head_id for token in sentence.buff]
+        # σ[0] is head of σ[1] and all childs of σ[1] are attached to it and σ[1] is not the root
         if stack_token_1.token_id != 0 and stack_token_1.head_id == stack_token_0.token_id \
                 and stack_token_1.token_id not in buff_head:
-            return self.dep_dict[stack_token_1.dep] * 2 +1 # left arc
+            return self.dep_dict[stack_token_1.dep] * 2  # left reduce
         # σ[1] is head of σ[0] and all childs of σ[0] are attached to it and σ[0] is not the root
         elif stack_token_0.head_id == stack_token_1.token_id and stack_token_0.token_id not in buff_head:
-            return self.dep_dict[stack_token_0.dep] * 2 + 2  # right arc
+            return self.dep_dict[stack_token_0.dep] * 2 + 1  # right reduce
+        elif stack_token_1.token_id != 0 and stack_token_1.inorder_traversal_idx > stack_token_0.inorder_traversal_idx:
+            return 1  # swap
         else:
             return 0 if len(sentence.buff) != 0 else None
 
     def update_state_by_transition(self, sentence, transition):
         """updates stack, buffer and dependencies"""
-        if transition is not None:
-            if transition == 0:  # shift
-                sentence.stack.append(sentence.buff[0])
-                sentence.buff = sentence.buff[1:] if len(sentence.buff) > 1 else []
-            elif transition % 2 == 1:  # left arc
-                # del the children token
-                sentence.stack.pop(-2)
-            elif transition % 2 == 0:  # right arc
-                sentence.stack.pop(-1)
+        if transition == 0:  # shift
+            sentence.stack.append(sentence.buff[0])
+            sentence.buff = sentence.buff[1:] if len(sentence.buff) > 1 else []
+        elif transition == 1:  # swap
+            token = sentence.stack.pop(-2)
+            token.swapped.append(sentence.stack[-1])
+            sentence.stack[-1].swapped.append(token)
+            sentence.buff.insert(0, token)
+        elif transition % 2 == 0:  # left reduce
+            sentence.stack.pop(-2)
+        elif transition % 2 == 1:  # right reduce
+            sentence.stack.pop(-1)
 
     def update_child_dependencies(self, sentence, transition):
-        """update left/right children"""
-        if transition % 2 == 1:
+        """update left/right children id"""
+        if transition % 2 == 0:
             head = sentence.stack[-1]
             dependent = sentence.stack[-2]
-        elif transition % 2 == 0:
+        elif transition % 2 == 1:
             head = sentence.stack[-2]
             dependent = sentence.stack[-1]
-
-        dependent.head_id = head.token_id    # save arc
-        dependent.dep = self.id2dep[(transition-1)//2]    # save dep
+        dependent.head_id = head.token_id  # store head
+        dependent.dep = self.id2dep[transition // 2]  # store dep
 
         if head.token_id > dependent.token_id:
             head.left_children.append(dependent)
@@ -255,6 +295,12 @@ class ArcStandardParser:
         else:
             head.right_children.append(dependent)
             head.right_children.sort(key=lambda x: x.token_id)
+
+    def terminal(self, sentence):
+        if len(sentence.stack) == 1 and sentence.stack[0].word == ROOT and sentence.buff == []:
+            return True
+        else:
+            return False
 
 
 def get_tfrecord(name):
@@ -288,7 +334,7 @@ def build_and_read_train(file):
                 dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if len(sen) > 1:
+                if len(sen) >= 5:
                     total_sentences.append(Sentence(sen))
                 sen = []
 
@@ -300,7 +346,7 @@ def build_and_read_train(file):
     with open(pos_file, 'w', encoding='utf8') as f:
         f.write('\n'.join([NULL, ROOT] + sorted(pos)))
     with open(dep_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join(sorted(dep) + [NULL]))
+        f.write('\n'.join([NULL] + sorted(dep)))
 
     return total_sentences
 
@@ -316,7 +362,7 @@ def read_test(file):
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if len(sen) > 1:
+                if len(sen) >= 5:
                     total_sentences.append(Sentence(sen))
                 sen = []
         if len(sen) > 0:
@@ -400,16 +446,17 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_example(idx, word, pos, arc, dep_id, action_seq):
+def convert_to_example(idx, word, pos, arc, dep, transition_seq):
     """convert one sample to example"""
     data = {
         'idx': _int64_feature(idx),
         'pos': _bytes_feature(pos),
         'arc': _int64_feature(arc),
-        'dep_id': _int64_feature(dep_id),
+        'dep': _bytes_feature(dep),
         'word': _bytes_feature(word),
-        'action_seq': _int64_feature(action_seq),
-        'length': _int64_feature(len(word))
+        'transition_seq': _int64_feature(transition_seq),
+        'sen_length': _int64_feature(len(word)),
+        'tran_length': _int64_feature(len(transition_seq))
     }
     features = tf.train.Features(feature=data)
     example = tf.train.Example(features=features)
@@ -423,19 +470,21 @@ def preprocess(serialized):
             'word': tf.VarLenFeature(tf.string),
             'pos': tf.VarLenFeature(tf.string),
             'arc': tf.VarLenFeature(tf.int64),
-            'dep_id': tf.VarLenFeature(tf.int64),
-            'action_seq': tf.VarLenFeature(tf.int64),
-            'length': tf.FixedLenFeature([], tf.int64)
+            'dep': tf.VarLenFeature(tf.string),
+            'transition_seq': tf.VarLenFeature(tf.int64),
+            'sen_length': tf.FixedLenFeature([], tf.int64),
+            'tran_length': tf.FixedLenFeature([], tf.int64)
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         idx = tf.sparse_tensor_to_dense(parsed_example['idx'])
         word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
         pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
         arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
-        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
-        action_seq = tf.sparse_tensor_to_dense(parsed_example['action_seq'])
-        length = parsed_example['length']
-        return idx, word, pos, arc, dep_id, action_seq, length
+        dep = tf.sparse_tensor_to_dense(parsed_example['dep'], default_value='')
+        transition_seq = tf.sparse_tensor_to_dense(parsed_example['transition_seq'])
+        sen_length = parsed_example['sen_length']
+        tran_length = parsed_example['tran_length']
+        return idx, word, pos, arc, dep, transition_seq, sen_length, tran_length
 
     return parse_tfrecord(serialized)
 
@@ -462,24 +511,25 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             else:
                 dataset = dataset.repeat(1)  # 1 Epoch
             dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], []))
+            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], [], []))
             iterator = dataset.make_initializable_iterator()
             next_batch = iterator.get_next()
             idx = next_batch[0]
             word = next_batch[1]
             pos = next_batch[2]
             arc = next_batch[3]
-            dep_id = next_batch[4]
-            action_seq = next_batch[5]
-            length = next_batch[6]
+            dep = next_batch[4]
+            transition_seq = next_batch[5]
+            sen_length = next_batch[6]
+            tran_length = next_batch[7]
 
             iterator_initializer_hook.iterator_initializer_func = \
                 lambda sess: sess.run(
                     iterator.initializer,
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
-            return {'idx': idx, 'word': word, 'pos': pos, 'length': length}, \
-                   {'action_seq': action_seq, 'arc': arc, 'dep_id': dep_id}
+            return {'idx': idx, 'word': word, 'pos': pos, 'sen_length': sen_length}, \
+                   {'transition_seq': transition_seq, 'tran_length': tran_length, 'arc': arc, 'dep': dep}
 
     return inputs, iterator_initializer_hook
 
@@ -492,6 +542,7 @@ def create_tfrecord():
     # build_wordvec_pkl()
     pos_dict = load_pos()
     dep_dict = load_dep()
+    parser = ArcStandardParser()
 
     if len(pos_dict) != Config.model.pos_num:
         raise ValueError('pos_num should be %d' % len(pos_dict))
@@ -516,35 +567,37 @@ def create_tfrecord():
                 while i < len(data):
                     sys.stdout.write('\r>> converting %d/%d' % (i + 1, len(data)))
                     sys.stdout.flush()
-                    parser = ArcStandardParser()
                     sen = data[i]
-                    action_seq = []
+                    transition_seq = []
                     idx = [t.token_id for t in sen.tokens]
                     word = [t.word.encode() for t in sen.tokens]
                     pos = [t.pos.encode() for t in sen.tokens]
                     arc = [t.head_id for t in sen.tokens]
-                    dep_id = dep2id([t.dep for t in sen.tokens],dep_dict)
-
-                    num_word = len(sen.tokens)
-
-                    for _ in range(num_word * 2):
+                    dep = [t.dep.encode() for t in sen.tokens]
+                    try:
+                        sen.inorder_traversal()
+                    except AssertionError:
+                        print('\nskip wrong data %d' % (i + 1))
+                        i += 1
+                        continue
+                    while True:
                         legal_transitions = parser.get_legal_transitions(sen)
                         transition = parser.get_oracle_from_current_state(sen)
-                        # non-projective
                         if transition is None:
-                            print('\nnon-projective!!')
-                            break
-                        assert legal_transitions[transition] == 1
-                        # update stack
+                            print('\nerror')
+                            continue
+                        assert legal_transitions[transition] == 1, 'oracle is illegal'
+                        # update stack and buff
                         parser.update_state_by_transition(sen, transition)
-                        action_seq.append(transition)
+                        transition_seq.append(transition)
+                        if parser.terminal(sen):
+                            break
 
+                    example = convert_to_example(idx, word, pos, arc, dep, transition_seq)
+                    serialized = example.SerializeToString()
+                    tfrecord_writer.write(serialized)
                     i += 1
-                    if len(action_seq) == num_word * 2:
-                        example = convert_to_example(idx, word, pos, arc, dep_id, action_seq)
-                        serialized = example.SerializeToString()
-                        tfrecord_writer.write(serialized)
-                        j += 1
+                    j += 1
                     if j >= 5000 and data == train_data:  # totally shuffled
                         break
                 fidx += 1
@@ -554,7 +607,7 @@ def create_tfrecord():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', type=str, default='config/structured-prediction.yml',
+    parser.add_argument('--config', type=str, default='config/structured-learning+swap.yml',
                         help='config file name')
     args = parser.parse_args()
 
