@@ -7,7 +7,7 @@ import pickle
 
 from utils import Config, strQ2B
 
-NULL = "<NULL>"
+# NULL = "<NULL>"
 UNK = "<UNK>"
 ROOT = "<ROOT>"
 
@@ -33,50 +33,19 @@ class Token:
         self.pos = pos
         self.dep = dep
         self.head_id = head_id
-        # self.predicted_head_id = None
+        self.swapped = list()
         self.left_children = list()
         self.right_children = list()
-        self.inorder_traversal_idx = None
-        self.swapped = list()  # prevent 2 same token being swapped more than once
-
-    def is_root_token(self):
-        if self.word == ROOT:
-            return True
-        return False
-
-    def is_null_token(self):
-        if self.word == NULL:
-            return True
-        return False
-
-    def is_unk_token(self):
-        if self.word == UNK:
-            return True
-        return False
-
-    def reset_predicted_head_id(self):
-        self.predicted_head_id = None
-
-
-NULL_TOKEN = Token(0, NULL, NULL, NULL, -1)
-ROOT_TOKEN = Token(0, ROOT, ROOT, ROOT, -1)
+        self.comp_history = []
+        self.comp_action = []
 
 
 class Sentence:
     def __init__(self, tokens):
         self.tokens = tokens
         self.buff = [token for token in self.tokens]
-        self.stack = [ROOT_TOKEN]
-        # self.dependencies = []
-        # self.predicted_dependencies = []
-        # for beam search
-        self.bs_score = 0
-        self.bs_ave_score = 0
-        self.bs_transition_seq = []
-        self.bs_tran_length = 0
-        self.bs_input_seq = []
-        self.bs_legal_transition = None
-        self.terminate = False
+        self.stack = [Token(0, ROOT, ROOT, ROOT, -1)]
+        self.history_action = []
 
     def inorder_traversal(self):
         """get inorder traversal index to convert non-projective to projective"""
@@ -107,131 +76,47 @@ class Sentence:
         for i, token in enumerate(result):
             token.inorder_traversal_idx = i + 1
 
-    def new_branch(self, score, action, inputs):
-        new = pickle.loads(pickle.dumps(self, -1))
-        new.bs_score = new.bs_score + score
-        new.bs_transition_seq.append(action)
-        new.bs_input_seq.append(inputs)
-        new.bs_tran_length += 1
-        new.bs_ave_score = new.bs_score/len(new.bs_input_seq)
-        return new
-
-    def clear_prediction_dependencies(self):
-        self.predicted_dependencies = []
-
-    def clear_children_info(self):
-        for token in self.tokens:
-            token.left_children = []
-            token.right_children = []
-
-    def load_gold_dependency_mapping(self):
-        for token in self.tokens:
-            if token.head_id != -1:
-                token.parent = self.tokens[token.head_id]
-                if token.head_id > token.token_id:
-                    token.parent.left_children.append(token.token_id)
-                else:
-                    token.parent.right_children.append(token.token_id)
-            else:
-                token.parent = self.Root
-
-        for token in self.tokens:
-            token.left_children.sort()
-            token.right_children.sort()
-
 
 class ArcStandardParser:
     def __init__(self):
         self.vocab = load_vocab()
         self.pos_dict = load_pos()
         self.dep_dict = load_dep()
-        self.id2dep = {i: t for i, t in enumerate(self.dep_dict)}
 
-    def extract_from_stack_and_buffer(self, sentence, num_word=3):
-        """extract the last 3 tokens in the stack and the first 3 tokens in the buff, concat them as direct_tokens"""
-        tokens = []
-        # pad NULL at the beginning until 3 if len(stack) < 3
-        tokens.extend([NULL_TOKEN for _ in range(num_word - len(sentence.stack))])
-        # extract the last 3 tokens in stack
-        tokens.extend(sentence.stack[-num_word:])
-        # add the first 3 tokens in buff
-        tokens.extend(sentence.buff[:num_word])
-        # pad NULL at the end until 3 if len(buff) < 3
-        tokens.extend([NULL_TOKEN for _ in range(num_word - len(sentence.buff))])
-        # return a list of 6 tokens
-        return tokens
-
-    def extract_for_current_state(self, sentence):
-        """cal direct_tokens and children_tokens to combine current state"""
-        direct_tokens = self.extract_from_stack_and_buffer(sentence, Config.data.num_stack_word)  # 6 tokens
-        children_tokens = self.extract_children_from_stack(sentence, Config.data.children_stack_range)  # 12 tokens
-
-        word_features = []
-        pos_features = []
-        dep_features = []
-
-        # Word features -> 18
-        word_features.extend([token.word for token in direct_tokens])
-        word_features.extend([token.word for token in children_tokens])
-
-        # pos features -> 18
-        pos_features.extend([token.pos for token in direct_tokens])
-        pos_features.extend([token.pos for token in children_tokens])
-
-        # dep features -> 12 (only children)
-        dep_features.extend([token.dep for token in children_tokens])
-
-        word_input_ids = [self.vocab.get(word, self.vocab[UNK]) for word in word_features]
-        pos_input_ids = [self.pos_dict[pos] for pos in pos_features]
-        dep_input_ids = [self.dep_dict[dep] for dep in dep_features]
-
-        return [word_input_ids, pos_input_ids, dep_input_ids]  # 48 features
-
-    def extract_children_from_stack(self, sentence, num_word=2):
-        """extract children from the last 2 token in stack"""
-        children_tokens = []
-        for i in range(num_word):
-            if len(sentence.stack) > i:
-                # the first token in the token.left_children
-                lc0 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 0, "left", 1)
-                # the first token in the token.right_children
-                rc0 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 0, "right", 1)
-                # the second token in the token.left_children
-                lc1 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 1, "left",
-                                                        1) if lc0 != NULL_TOKEN else NULL_TOKEN
-                # the second token in the token.right_children
-                rc1 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 1, "right",
-                                                        1) if rc0 != NULL_TOKEN else NULL_TOKEN
-                # the first token in the left_children of the first token in the token.left_children
-                llc0 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 0, "left",
-                                                         2) if lc0 != NULL_TOKEN else NULL_TOKEN
-                # the first token in the right_children of the first token in the token.right_children
-                rrc0 = self.get_child_by_index_and_depth(sentence, sentence.stack[-i - 1], 0, "right",
-                                                         2) if rc0 != NULL_TOKEN else NULL_TOKEN
-
-                children_tokens.extend([lc0, rc0, lc1, rc1, llc0, rrc0])
+    def extract_from_composition(self, sentence):
+        comp_word_id = []  # [stack_num, max(comp_word_len)]
+        comp_pos_id = []  # [stack_num, max(comp_word_len)]
+        comp_word_len = []  # [stack_num]
+        comp_action_id = []  # [stack_num, max(comp_action_len)]
+        comp_action_len = []  # [stack_num]
+        for token in sentence.stack:
+            if token.comp_history:
+                comp_word_id.append(word2id([t.word for t in token.comp_history], self.vocab))
+                comp_pos_id.append(pos2id([t.pos for t in token.comp_history], self.pos_dict))
+                comp_action_id.append(token.comp_action)
+                comp_word_len.append(len(token.comp_history))
             else:
-                [children_tokens.append(NULL_TOKEN) for _ in range(6)]
-        # return 12 tokens
-        return children_tokens
+                comp_word_id.append(word2id([token.word], self.vocab))  # add self when no composition
+                comp_pos_id.append(pos2id([token.pos], self.pos_dict))
+                comp_action_id.append([0])
+                comp_word_len.append(1)
+            comp_action_len.append(len(token.comp_action))
+        for i, l in enumerate(comp_action_len):
+            comp_word_id[i] = comp_word_id[i] + [0] * (max(comp_word_len) - len(comp_word_id[i]))
+            comp_pos_id[i] = comp_pos_id[i] + [0] * (max(comp_word_len) - len(comp_pos_id[i]))
+            comp_action_id[i] = comp_action_id[i] + [0] * (max(comp_action_len) - len(comp_action_id[i]))
 
-    def get_child_by_index_and_depth(self, sentence, token, index, direction, depth):
-        """get child token, return NULL if no child"""
-        if depth == 0:
-            return token
+        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len
 
-        if direction == "left":
-            if len(token.left_children) > index:
-                return self.get_child_by_index_and_depth(sentence,
-                                                         token.left_children[index], index,
-                                                         direction, depth - 1)
-            return NULL_TOKEN
-        else:
-            if len(token.right_children) > index:
-                return self.get_child_by_index_and_depth(sentence,
-                                                         token.right_children[::-1][index], index,
-                                                         direction, depth - 1)
-            return NULL_TOKEN
+    def extract_from_current_state(self, sentence):
+        comp_word_id, comp_pos_id, comp_action_id, comp_action_len = self.extract_from_composition(sentence)  # comp include stack word
+        buff_token = sentence.buff
+        history_action_id = sentence.history_action
+
+        buff_word_id = [self.vocab.get(token.word, self.vocab[UNK]) for token in buff_token[::-1]]  # reversed
+        buff_pos_id = [self.pos_dict[token.pos] for token in buff_token[::-1]]  # reversed
+
+        return comp_word_id, comp_pos_id,  comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id
 
     def get_legal_transitions(self, sentence):
         """check legality of shift, swap, left reduce, right reduce"""
@@ -239,7 +124,7 @@ class ArcStandardParser:
         transitions += [1] if len(sentence.stack) > 2 and sentence.stack[-1] not in sentence.stack[-2].swapped else [0]
         transitions += ([1] if len(sentence.stack) > 2 else [0])
         transitions += ([1] if len(sentence.stack) >= 2 else [0])
-        transitions = transitions[:2] + transitions[2:] * (Config.model.dep_num - 1)  # exclude NULL in dep dict
+        transitions = transitions[:2] + transitions[2:] * (Config.model.dep_num)
         return transitions
 
     def get_oracle_from_current_state(self, sentence):
@@ -253,10 +138,10 @@ class ArcStandardParser:
         # σ[0] is head of σ[1] and all childs of σ[1] are attached to it and σ[1] is not the root
         if stack_token_1.token_id != 0 and stack_token_1.head_id == stack_token_0.token_id \
                 and stack_token_1.token_id not in buff_head:
-            return self.dep_dict[stack_token_1.dep] * 2  # left reduce
+            return 2 + self.dep_dict[stack_token_1.dep] * 2  # left reduce
         # σ[1] is head of σ[0] and all childs of σ[0] are attached to it and σ[0] is not the root
         elif stack_token_0.head_id == stack_token_1.token_id and stack_token_0.token_id not in buff_head:
-            return self.dep_dict[stack_token_0.dep] * 2 + 1  # right reduce
+            return 2 + self.dep_dict[stack_token_0.dep] * 2 + 1  # right reduce
         elif stack_token_1.token_id != 0 and stack_token_1.inorder_traversal_idx > stack_token_0.inorder_traversal_idx:
             return 1  # swap
         else:
@@ -276,24 +161,19 @@ class ArcStandardParser:
             sentence.stack.pop(-2)
         elif transition % 2 == 1:  # right reduce
             sentence.stack.pop(-1)
+        sentence.history_action.append(transition)
 
-    def update_child_dependencies(self, sentence, transition):
-        """update left/right children id"""
-        if transition % 2 == 0:
+    def update_composition(self, sentence, transition):
+        """update composition"""
+        if transition % 2 == 0:  # left reduce
             head = sentence.stack[-1]
             dependent = sentence.stack[-2]
-        elif transition % 2 == 1:
+        elif transition % 2 == 1:  # right reduce
             head = sentence.stack[-2]
             dependent = sentence.stack[-1]
-        dependent.head_id = head.token_id  # store head
-        dependent.dep = self.id2dep[transition // 2]  # store dep
 
-        if head.token_id > dependent.token_id:
-            head.left_children.append(dependent)
-            head.left_children.sort(key=lambda x: x.token_id)
-        else:
-            head.right_children.append(dependent)
-            head.right_children.sort(key=lambda x: x.token_id)
+        head.comp_history.extend(dependent.comp_history + [head, dependent])
+        head.comp_action.extend(dependent.comp_action + [transition - 2])
 
     def terminal(self, sentence):
         if len(sentence.stack) == 1 and sentence.stack[0].word == ROOT and sentence.buff == []:
@@ -341,11 +221,11 @@ def build_and_read_train(file):
             total_sentences.append(Sentence(sen))
 
     with open(vocab_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join([NULL, UNK, ROOT] + sorted(vocab)))
+        f.write('\n'.join([UNK, ROOT] + sorted(vocab)))
     with open(pos_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join([NULL, ROOT] + sorted(pos)))
+        f.write('\n'.join([ROOT] + sorted(pos)))
     with open(dep_file, 'w', encoding='utf8') as f:
-        f.write('\n'.join([NULL] + sorted(dep)))
+        f.write('\n'.join(sorted(dep)))
 
     return total_sentences
 
@@ -389,6 +269,22 @@ def load_vocab():
     with open(vocab_file, encoding='utf8') as f:
         words = f.read().splitlines()
     return {word: i for i, word in enumerate(words)}
+
+
+# def load_comp_action(dict):
+#     comp_action_dict = {}
+#     for i, dep in enumerate(dict):
+#         for j, direction in enumerate(['left', 'right']):
+#             comp_action_dict[direction + '-' + dep] = 2 * i + j
+#     return comp_action_dict
+#
+#
+# def load_history_action(dict):
+#     history_action_dict = {'shift': 0, 'swap': 1}
+#     for i, dep in enumerate(dict):
+#         for j, a in enumerate(['left-reduce', 'right-reduce']):
+#             history_action_dict[a + '-' + dep] = 2 + 2 * i + j
+#     return history_action_dict
 
 
 def build_wordvec_pkl():
@@ -445,17 +341,22 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_example(idx, word, pos, arc, dep_id, transition_seq):
+def convert_to_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id,
+                       buff_pos_id, history_action_id, transition):
     """convert one sample to example"""
     data = {
-        'idx': _int64_feature(idx),
-        'pos': _bytes_feature(pos),
-        'arc': _int64_feature(arc),
-        'dep_id': _int64_feature(dep_id),
-        'word': _bytes_feature(word),
-        'transition_seq': _int64_feature(transition_seq),
-        'sen_length': _int64_feature(len(word)),
-        'tran_length': _int64_feature(len(transition_seq))
+        'buff_word_id': _int64_feature(buff_word_id),
+        'buff_pos_id': _int64_feature(buff_pos_id),
+        'history_action_id': _int64_feature(history_action_id),
+        'comp_word_id': _bytes_feature(np.array(comp_word_id, np.int64).tostring()),
+        'comp_pos_id': _bytes_feature(np.array(comp_pos_id, np.int64).tostring()),
+        'comp_action_id': _bytes_feature(np.array(comp_action_id, np.int64).tostring()),
+        # 'comp_word_len': _int64_feature(comp_word_len),
+        'comp_action_len': _int64_feature(comp_action_len),
+        'transition': _int64_feature(transition),
+        'stack_length': _int64_feature(len(comp_word_id)),
+        'buff_length': _int64_feature(len(buff_word_id)),
+        'history_action_length': _int64_feature(len(history_action_id))
     }
     features = tf.train.Features(feature=data)
     example = tf.train.Example(features=features)
@@ -465,72 +366,78 @@ def convert_to_example(idx, word, pos, arc, dep_id, transition_seq):
 def preprocess(serialized):
     def parse_tfrecord(serialized):
         features = {
-            'idx': tf.VarLenFeature(tf.int64),
-            'word': tf.VarLenFeature(tf.string),
-            'pos': tf.VarLenFeature(tf.string),
-            'arc': tf.VarLenFeature(tf.int64),
-            'dep_id': tf.VarLenFeature(tf.int64),
-            'transition_seq': tf.VarLenFeature(tf.int64),
-            'sen_length': tf.FixedLenFeature([], tf.int64),
-            'tran_length': tf.FixedLenFeature([], tf.int64)
+            'buff_word_id': tf.VarLenFeature(tf.int64),
+            'buff_pos_id': tf.VarLenFeature(tf.int64),
+            'history_action_id': tf.VarLenFeature(tf.int64),
+            'comp_word_id': tf.FixedLenFeature([], tf.string),
+            'comp_pos_id': tf.FixedLenFeature([], tf.string),
+            'comp_action_id': tf.FixedLenFeature([], tf.string),
+            # 'comp_word_len': tf.VarLenFeature(tf.int64),
+            'comp_action_len': tf.VarLenFeature(tf.int64),
+            'transition': tf.FixedLenFeature([], tf.int64),
+            'stack_length': tf.FixedLenFeature([], tf.int64),
+            'buff_length': tf.FixedLenFeature([], tf.int64),
+            'history_action_length': tf.FixedLenFeature([], tf.int64),
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
-        idx = tf.sparse_tensor_to_dense(parsed_example['idx'])
-        word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
-        pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
-        arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
-        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
-        transition_seq = tf.sparse_tensor_to_dense(parsed_example['transition_seq'])
-        sen_length = parsed_example['sen_length']
-        tran_length = parsed_example['tran_length']
-        return idx, word, pos, arc, dep_id, transition_seq, sen_length, tran_length
+        buff_word_id = tf.sparse_tensor_to_dense(parsed_example['buff_word_id'])
+        buff_pos_id = tf.sparse_tensor_to_dense(parsed_example['buff_pos_id'])
+        history_action_id = tf.sparse_tensor_to_dense(parsed_example['history_action_id'])
+        stack_length = parsed_example['stack_length']
+        transition = parsed_example['transition']
+        buff_length = parsed_example['buff_length']
+        history_action_length = parsed_example['history_action_length']
+        comp_action_len = tf.sparse_tensor_to_dense(parsed_example['comp_action_len'])
+        # comp_word_len = tf.sparse_tensor_to_dense(parsed_example['comp_word_len'])
+
+        comp_word_id = tf.decode_raw(parsed_example['comp_word_id'], tf.int64)
+        comp_word_id = tf.reshape(comp_word_id, tf.stack([stack_length, -1]))
+        comp_pos_id = tf.decode_raw(parsed_example['comp_pos_id'], tf.int64)
+        comp_pos_id = tf.reshape(comp_pos_id, tf.stack([stack_length, -1]))
+        comp_action_id = tf.decode_raw(parsed_example['comp_action_id'], tf.int64)
+        comp_action_id = tf.reshape(comp_action_id, tf.stack([stack_length, -1]))
+
+        return buff_word_id, buff_pos_id, history_action_id, comp_word_id, comp_pos_id, \
+               comp_action_id, comp_action_len, transition, stack_length, buff_length, history_action_length
 
     return parse_tfrecord(serialized)
 
 
 def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
-    class IteratorInitializerHook(tf.train.SessionRunHook):
+    with tf.name_scope(scope):
+        data = np.random.permutation(data)
+        dataset = tf.data.TFRecordDataset(data)
+        dataset = dataset.map(preprocess)
 
-        def __init__(self):
-            self.iterator_initializer_func = None
+        if scope == "train":
+            dataset = dataset.repeat(None)  # Infinite iterations
+        else:
+            dataset = dataset.repeat(1)  # 1 Epoch
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+        dataset = dataset.padded_batch(batch_size,
+                                       ([-1], [-1], [-1], [-1, -1], [-1, -1], [-1, -1], [-1], [], [], [], []))
+        iterator = iter(dataset)
 
-        def after_create_session(self, session, coord):
-            self.iterator_initializer_func(session)
+    def input():
+        next_batch = next(iterator)
+        buff_word_id = next_batch[0]
+        buff_pos_id = next_batch[1]
+        history_action_id = next_batch[2]
+        comp_word_id = next_batch[3]
+        comp_pos_id = next_batch[4]
+        comp_action_id = next_batch[5]
+        comp_action_len = next_batch[6]
+        transition = next_batch[7]
+        stack_length = next_batch[8]
+        buff_length = next_batch[9]
+        history_action_length = next_batch[10]
 
-    iterator_initializer_hook = IteratorInitializerHook()
+        return {'buff_word_id': buff_word_id, 'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
+                'comp_word_id': comp_word_id, 'comp_pos_id': comp_pos_id, 'comp_action_id': comp_action_id,
+                'comp_action_len': comp_action_len, 'stack_length': stack_length, 'buff_length': buff_length,
+                'history_action_length': history_action_length}, {'transition': transition}
 
-    def inputs():
-        with tf.name_scope(scope):
-            input_placeholder = tf.placeholder(tf.string)
-            dataset = tf.data.TFRecordDataset(input_placeholder)
-            dataset = dataset.map(preprocess)
-
-            if scope == "train":
-                dataset = dataset.repeat(None)  # Infinite iterations
-            else:
-                dataset = dataset.repeat(1)  # 1 Epoch
-            dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], [], []))
-            iterator = dataset.make_initializable_iterator()
-            next_batch = iterator.get_next()
-            idx = next_batch[0]
-            word = next_batch[1]
-            pos = next_batch[2]
-            arc = next_batch[3]
-            dep_id = next_batch[4]
-            transition_seq = next_batch[5]
-            sen_length = next_batch[6]
-            tran_length = next_batch[7]
-
-            iterator_initializer_hook.iterator_initializer_func = \
-                lambda sess: sess.run(
-                    iterator.initializer,
-                    feed_dict={input_placeholder: np.random.permutation(data)})
-
-            return {'idx': idx, 'word': word, 'pos': pos, 'sen_length': sen_length}, \
-                   {'transition_seq': transition_seq, 'tran_length': tran_length, 'arc': arc, 'dep_id': dep_id}
-
-    return inputs, iterator_initializer_hook
+    return input
 
 
 def create_tfrecord():
@@ -567,12 +474,6 @@ def create_tfrecord():
                     sys.stdout.write('\r>> converting %d/%d' % (i + 1, len(data)))
                     sys.stdout.flush()
                     sen = data[i]
-                    transition_seq = []
-                    idx = [t.token_id for t in sen.tokens]
-                    word = [t.word.encode() for t in sen.tokens]
-                    pos = [t.pos.encode() for t in sen.tokens]
-                    arc = [t.head_id for t in sen.tokens]
-                    dep_id = dep2id([t.dep for t in sen.tokens], dep_dict)
                     try:
                         sen.inorder_traversal()
                     except AssertionError:
@@ -580,23 +481,27 @@ def create_tfrecord():
                         i += 1
                         continue
                     while True:
+                        comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id \
+                            = parser.extract_from_current_state(sen)
                         legal_transitions = parser.get_legal_transitions(sen)
                         transition = parser.get_oracle_from_current_state(sen)
                         if transition is None:
                             print('\nerror')
                             continue
                         assert legal_transitions[transition] == 1, 'oracle is illegal'
-                        # update stack and buff
-                        parser.update_state_by_transition(sen, transition)
-                        transition_seq.append(transition)
+                        if transition not in [0, 1]:
+                            parser.update_composition(sen, transition)  # update composition
+                        parser.update_state_by_transition(sen, transition)  # update stack and buff
+                        example = convert_to_example(comp_word_id, comp_pos_id,comp_action_id,
+                                                     comp_action_len, buff_word_id, buff_pos_id, history_action_id,
+                                                     transition)
+                        serialized = example.SerializeToString()
+                        tfrecord_writer.write(serialized)
+                        i += 1
+                        j += 1
+
                         if parser.terminal(sen):
                             break
-
-                    example = convert_to_example(idx, word, pos, arc, dep_id, transition_seq)
-                    serialized = example.SerializeToString()
-                    tfrecord_writer.write(serialized)
-                    i += 1
-                    j += 1
                     if j >= 5000 and data == train_data:  # totally shuffled
                         break
                 fidx += 1
@@ -606,7 +511,7 @@ def create_tfrecord():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', type=str, default='config/structured-learning+swap.yml',
+    parser.add_argument('--config', type=str, default='config/stack-lstm+swap.yml',
                         help='config file name')
     args = parser.parse_args()
 
