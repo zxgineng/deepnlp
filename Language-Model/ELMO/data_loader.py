@@ -80,7 +80,7 @@ def load_vocab():
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     with open(vocab_file, encoding='utf8') as f:
         words = f.read().splitlines()
-    assert len(words) == Config.model.vocab_num
+    assert len(words) == Config.model.vocab_num, len(words)
     return {word: i for i, word in enumerate(words)}
 
 
@@ -283,7 +283,7 @@ def get_both_batch(dataA, dataB, buffer_size=1, batch_size=64, scope="train"):
 
 
 def create_tfrecord():
-    split_train_test()
+    # split_train_test()
     build_vocab()
     build_char_pkl()
     vocab = load_vocab()

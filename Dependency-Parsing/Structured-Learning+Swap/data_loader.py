@@ -437,7 +437,7 @@ def pos2id(pos, dict):
 
 
 def dep2id(dep, dict):
-    dep_id = [dict[d] for d in dep]
+    dep_id = [dict.get(d) for d in dep]
     return dep_id
 
 
@@ -446,13 +446,13 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_example(idx, word, pos, arc, dep, transition_seq):
+def convert_to_example(idx, word, pos, arc, dep_id, transition_seq):
     """convert one sample to example"""
     data = {
         'idx': _int64_feature(idx),
         'pos': _bytes_feature(pos),
         'arc': _int64_feature(arc),
-        'dep': _bytes_feature(dep),
+        'dep_id': _int64_feature(dep_id),
         'word': _bytes_feature(word),
         'transition_seq': _int64_feature(transition_seq),
         'sen_length': _int64_feature(len(word)),
@@ -470,7 +470,7 @@ def preprocess(serialized):
             'word': tf.VarLenFeature(tf.string),
             'pos': tf.VarLenFeature(tf.string),
             'arc': tf.VarLenFeature(tf.int64),
-            'dep': tf.VarLenFeature(tf.string),
+            'dep_id': tf.VarLenFeature(tf.int64),
             'transition_seq': tf.VarLenFeature(tf.int64),
             'sen_length': tf.FixedLenFeature([], tf.int64),
             'tran_length': tf.FixedLenFeature([], tf.int64)
@@ -480,11 +480,11 @@ def preprocess(serialized):
         word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
         pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
         arc = tf.sparse_tensor_to_dense(parsed_example['arc'])
-        dep = tf.sparse_tensor_to_dense(parsed_example['dep'], default_value='')
+        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
         transition_seq = tf.sparse_tensor_to_dense(parsed_example['transition_seq'])
         sen_length = parsed_example['sen_length']
         tran_length = parsed_example['tran_length']
-        return idx, word, pos, arc, dep, transition_seq, sen_length, tran_length
+        return idx, word, pos, arc, dep_id, transition_seq, sen_length, tran_length
 
     return parse_tfrecord(serialized)
 
@@ -518,7 +518,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
             word = next_batch[1]
             pos = next_batch[2]
             arc = next_batch[3]
-            dep = next_batch[4]
+            dep_id = next_batch[4]
             transition_seq = next_batch[5]
             sen_length = next_batch[6]
             tran_length = next_batch[7]
@@ -529,7 +529,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
                     feed_dict={input_placeholder: np.random.permutation(data)})
 
             return {'idx': idx, 'word': word, 'pos': pos, 'sen_length': sen_length}, \
-                   {'transition_seq': transition_seq, 'tran_length': tran_length, 'arc': arc, 'dep': dep}
+                   {'transition_seq': transition_seq, 'tran_length': tran_length, 'arc': arc, 'dep_id': dep_id}
 
     return inputs, iterator_initializer_hook
 
@@ -539,7 +539,7 @@ def create_tfrecord():
     train_data = build_and_read_train(train_file)
     test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
     test_data = read_test(test_file)
-    # build_wordvec_pkl()
+    build_wordvec_pkl()
     pos_dict = load_pos()
     dep_dict = load_dep()
     parser = ArcStandardParser()
@@ -573,7 +573,7 @@ def create_tfrecord():
                     word = [t.word.encode() for t in sen.tokens]
                     pos = [t.pos.encode() for t in sen.tokens]
                     arc = [t.head_id for t in sen.tokens]
-                    dep = [t.dep.encode() for t in sen.tokens]
+                    dep_id = dep2id([t.dep for t in sen.tokens], dep_dict)
                     try:
                         sen.inorder_traversal()
                     except AssertionError:
@@ -593,7 +593,7 @@ def create_tfrecord():
                         if parser.terminal(sen):
                             break
 
-                    example = convert_to_example(idx, word, pos, arc, dep, transition_seq)
+                    example = convert_to_example(idx, word, pos, arc, dep_id, transition_seq)
                     serialized = example.SerializeToString()
                     tfrecord_writer.write(serialized)
                     i += 1
@@ -616,19 +616,3 @@ if __name__ == '__main__':
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
     create_tfrecord()
-
-    # tfrecord = get_tfrecord('train')
-    # dataset = tf.data.TFRecordDataset(tfrecord)
-    # dataset = dataset.map(preprocess)
-    # dataset = dataset.padded_batch(2, ([-1], [-1], [-1], [-1], [-1], [-1], []))
-    # it = dataset.make_one_shot_iterator()
-    # batch = it.get_next()
-    # sess = tf.Session()
-    # i,w,p,a,d,seq,l = sess.run(batch)
-    # print(i)
-    # print(w)
-    # print(p)
-    # print(a)
-    # print(d)
-    # print(seq)
-    # print(l)

@@ -50,8 +50,7 @@ def main(mode):
     run_config = tf.estimator.RunConfig(
         model_dir=Config.train.model_dir,
         session_config=config,
-        save_checkpoints_steps=Config.train.save_checkpoints_steps,
-        log_step_count_steps=None)
+        save_checkpoints_steps=Config.train.save_checkpoints_steps)
 
     run(mode, run_config)
 

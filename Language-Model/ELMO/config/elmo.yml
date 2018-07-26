@@ -1,6 +1,6 @@
 data:
   dataset_path: '~/data/dataset/nlp/classification/THUCNews/'
-  processed_path: '~/data/processed-data/nlp/language-model/elmo/'
+  processed_path: '~/big_data/processed-data/nlp/language-model/elmo/'
 
   train_data: 'train-files.txt'
   test_data: 'test-files.txt'
@@ -33,5 +33,5 @@ train:
   epoch: 0
   max_epoch: 10
 
-  model_dir: '~/data/logs/nlp/language-model/elmo/'
+  model_dir: '~/big_data/logs/nlp/language-model/elmo/'
   save_checkpoints_steps: 2000

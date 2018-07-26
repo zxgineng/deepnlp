@@ -53,7 +53,6 @@ class Model:
 
     def _build_train_op(self):
         global_step = tf.train.get_global_step()
-        # learning_rate = Config.train.initial_lr / (Config.train.decay_rate * Config.train.epoch + 1)
         learning_rate = Config.train.initial_lr
 
         self.train_op = slim.optimize_loss(

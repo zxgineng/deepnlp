@@ -1,40 +1,38 @@
 import numpy as np
 import tensorflow as tf
-import multiprocessing
+import os
 
 from utils import Config
-from data_loader import ArcStandardParser, Token, Sentence
+from data_loader import ArcStandardParser, Token, Sentence,dep2id,load_dep
 
 
-# def _select_branch(sen, temp, batch_word_id, batch_pos_id, batch_dep_id, batch_action_scores,score_idx,parser):
-#     if sen.terminate:
-#         sen.bs_input_seq.append(([-1] * Config.model.word_feature_num,
-#                                  [-1] * Config.model.pos_feature_num,
-#                                  [-1] * Config.model.dp_feature_num))
-#         sen.bs_transition_seq.append(-1)
-#         temp.append(sen)
-#     else:
-#         sen.bs_legal_transition = parser.get_legal_transitions(sen)
-#         for j, s in enumerate(batch_action_scores[score_idx]):
-#             if sen.bs_legal_transition[j] == 1:
-#                 temp.append(sen.new_branch(
-#                     s, j, (batch_word_id[score_idx], batch_pos_id[score_idx], batch_dep_id[score_idx])))
-
-
-class BeamTrainHook(tf.train.SessionRunHook):
-    def __init__(self, inputs, targets):
+class BeamSearchHook(tf.train.SessionRunHook):
+    def __init__(self, inputs, targets,mode='train'):
         self.idx = inputs['idx']
         self.word = inputs['word']
         self.pos = inputs['pos']
         self.sen_length = inputs['sen_length']
         self.transition_seq = targets['transition_seq']
         self.tran_length = targets['tran_length']
+        self.head_id = targets['arc']
+        self.dep_id = targets['dep_id']
         self.parser = ArcStandardParser()
         self.no_op = tf.no_op()
+        self.dep_dict = load_dep()
+
+        self.mode = mode
+        if mode == 'eval':
+            self.total = 0
+            self.correct_dep = 0
+            self.model_dir = os.path.join(Config.train.model_dir, 'eval')
+
+    def begin(self):
+        if self.mode == 'eval':
+            self._summary_writer = tf.summary.FileWriter(self.model_dir)
 
     def before_run(self, run_context):
-        idx, word, pos, sen_length, transition_seq,tran_length = run_context.session.run(
-            [self.idx, self.word, self.pos, self.sen_length, self.transition_seq, self.tran_length])
+        idx, word, pos, sen_length, transition_seq,tran_length,gold_head,gold_dep_id = run_context.session.run(
+            [self.idx, self.word, self.pos, self.sen_length, self.transition_seq, self.tran_length,self.head_id,self.dep_id])
         batch_size = word.shape[0]
         total_sen = [Sentence([Token(idx[i][n], word[i][n].decode(), pos[i][n].decode(), None,None) for
                                n in range(sen_length[i])]) for i in range(batch_size)]
@@ -93,6 +91,10 @@ class BeamTrainHook(tf.train.SessionRunHook):
                     assert len(gold) == 1, 'find %d gold' % len(gold)
 
                     if gold[0][0] >= Config.model.beam_size:    # gold fall out
+                        # cal eval score
+                        if self.mode == 'eval':
+                            self._calculate_eval_score(temp, i, gold_head, gold_dep_id, sen_length)
+
                         stopped_bs[i] = True
                         fall_out_count+=1
                         all_bs_seq[i] = [gold[0][1]] + temp[:Config.model.beam_size - 1]
@@ -110,6 +112,10 @@ class BeamTrainHook(tf.train.SessionRunHook):
                                     sen.terminate = True
                             stopped_list.append(sen.terminate)
                         if stopped_list == [True] * len(all_bs_seq[i]):
+                            # cal eval score
+                            if self.mode == 'eval':
+                                self._calculate_eval_score(temp, i, gold_head, gold_dep_id, sen_length)
+
                             stopped_bs[i] = True
                             end_count+=1
                             all_bs_seq[i].pop(gold[0][0])
@@ -164,6 +170,44 @@ class BeamTrainHook(tf.train.SessionRunHook):
                                                    'slicer:0':slicer,
                                                    'bs_tran_length:0':bs_tran_length,
                                                    'beam_search_action:0':beam_search_action})
+
+    def end(self, session):
+        if self.mode == 'eval':
+            global_step = session.run(tf.train.get_global_step())
+            summary_op = tf.get_default_graph().get_collection('acc')
+
+            dep_acc = self.correct_dep / self.total
+
+            summary = session.run(summary_op, {'dep_ph:0': dep_acc})
+            for s in summary:
+                self._summary_writer.add_summary(s, global_step)
+
+            self._summary_writer.flush()
+
+            print('*' * 40)
+            print("epoch", Config.train.epoch + 1, 'finished')
+            print('LAS:', dep_acc)
+            print('*' * 40)
+
+
+    def _calculate_eval_score(self,temp,i,gold_head,gold_dep_id,sen_length):
+        """calculate eval score"""
+        best_sen = temp[0]
+        transition = best_sen.bs_transition_seq[-1]
+        if transition != 0:
+            self.parser.update_child_dependencies(best_sen,
+                                                  transition)  # update left/right children
+        self.parser.update_state_by_transition(best_sen, transition)  # update stack and buff
+        gold_head = gold_head[i, :sen_length[i]]
+        pred_head = np.array([t.head_id for t in best_sen.tokens])
+        assert len(gold_head) == len(pred_head)
+        self.total += len(gold_head)
+        correct_head = gold_head == pred_head
+        gold_dep = gold_dep_id[i, :sen_length[i]]
+        pred_dep = np.array(dep2id([t.dep for t in best_sen.tokens], self.dep_dict))
+        correct_dep = gold_dep == pred_dep
+        self.correct_dep += np.sum(np.logical_and(correct_head, correct_dep))
+
 
 
 

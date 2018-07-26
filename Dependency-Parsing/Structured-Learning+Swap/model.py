@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import BeamTrainHook
+from hooks import BeamSearchHook
 
 
 class Model:
@@ -14,7 +14,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions, self.training_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.training_hooks,self.evaluation_hooks = None, None, None, None,None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -26,7 +26,8 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             predictions=self.predictions,
-            training_hooks=self.training_hooks)
+            training_hooks=self.training_hooks,
+            evaluation_hooks=self.evaluation_hooks)
 
     def build_graph(self):
         graph = Graph(self.mode)
@@ -74,7 +75,7 @@ class Model:
             bs_scores_seq = tf.reduce_sum(tf.multiply(tf.one_hot(action, action_num), logits),-1)  # [beam_size,max_len]
             mask = tf.sequence_mask(bs_tran_length[i],dtype=tf.float32)  # [beam_size,max_len]
             bs_scores_seq = mask * bs_scores_seq
-            one_sample_scores = tf.reduce_sum(bs_scores_seq,-1)/tf.cast(bs_tran_length[i],tf.float32)  # [beam_size]
+            one_sample_scores = tf.reduce_sum(bs_scores_seq,-1)/tf.cast(bs_tran_length[i],tf.float32)  # ave score of all branch [beam_size]
 
             scores = tf.concat([scores, one_sample_scores], -1)
 
@@ -89,8 +90,13 @@ class Model:
 
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(scores)
-            self._build_train_op()
-            self.training_hooks = [BeamTrainHook(self.inputs, self.targets)]
+            if self.mode == tf.estimator.ModeKeys.TRAIN:
+                self._build_train_op()
+                self.training_hooks = [BeamSearchHook(self.inputs, self.targets,'train')]
+            else:
+                dep_acc = tf.placeholder(tf.float32, None, 'dep_ph')
+                tf.summary.scalar('LAS', dep_acc, ['acc'], 'score')
+                self.evaluation_hooks = [BeamSearchHook(self.inputs, self.targets,'eval')]
 
     def _build_loss(self, logits):
         logits = tf.reshape(logits,[-1,Config.model.beam_size])
