@@ -94,7 +94,9 @@ class Model:
                 self._build_train_op()
                 self.training_hooks = [BeamSearchHook(self.inputs, self.targets,'train')]
             else:
+                head_acc = tf.placeholder(tf.float32, None, 'head_ph')
                 dep_acc = tf.placeholder(tf.float32, None, 'dep_ph')
+                tf.summary.scalar('UAS', head_acc, ['acc'], 'score')
                 tf.summary.scalar('LAS', dep_acc, ['acc'], 'score')
                 self.evaluation_hooks = [BeamSearchHook(self.inputs, self.targets,'eval')]
 
