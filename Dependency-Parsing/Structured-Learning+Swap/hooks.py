@@ -47,7 +47,6 @@ class BeamSearchHook(tf.train.SessionRunHook):
         fall_out_count = 0
         end_count = 0
         while True:
-            print('t_step:',t_step)
             # extract features from all beam search candidates and calculate scores of next transitions
             batch_word_id, batch_pos_id, batch_dep_id = [], [], []
             for i in range(batch_size):
@@ -66,13 +65,7 @@ class BeamSearchHook(tf.train.SessionRunHook):
             for i in range(batch_size):
                 if not stopped_bs[i]:
                     temp = []
-                    # temp = multiprocessing.Manager().list()
-                    # pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
                     for sen in all_bs_seq[i]:
-                        # pool.apply_async(_select_branch, args=(s, j, sen, temp, batch_word_id, batch_pos_id, batch_dep_id, score_idx))
-                        # pool.close()
-                        # pool.join()
-
                         if sen.terminate:
                             # keep the seq length of all beam search paths of one sentence same
                             sen.bs_input_seq.append(([0] * Config.model.word_feature_num,

@@ -39,24 +39,6 @@ class Token:
         self.inorder_traversal_idx = None
         self.swapped = list()  # prevent 2 same token being swapped more than once
 
-    def is_root_token(self):
-        if self.word == ROOT:
-            return True
-        return False
-
-    def is_null_token(self):
-        if self.word == NULL:
-            return True
-        return False
-
-    def is_unk_token(self):
-        if self.word == UNK:
-            return True
-        return False
-
-    def reset_predicted_head_id(self):
-        self.predicted_head_id = None
-
 
 NULL_TOKEN = Token(0, NULL, NULL, NULL, -1)
 ROOT_TOKEN = Token(0, ROOT, ROOT, ROOT, -1)
@@ -67,8 +49,6 @@ class Sentence:
         self.tokens = tokens
         self.buff = [token for token in self.tokens]
         self.stack = [ROOT_TOKEN]
-        # self.dependencies = []
-        # self.predicted_dependencies = []
         # for beam search
         self.bs_score = 0
         self.bs_ave_score = 0

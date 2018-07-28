@@ -19,7 +19,6 @@ model:
   pos_feature_num: 18
   dep_feature_num: 12
   fc_unit: 200
-  reg_scale: 0.00000001
   dropout_keep_prob: 0.5
   dep_num: 47
   pos_num: 39

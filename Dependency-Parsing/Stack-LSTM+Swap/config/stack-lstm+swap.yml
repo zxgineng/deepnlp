@@ -18,9 +18,6 @@ model:
   lstm_unit: 100
   lstm_layer_num: 2
   embedding_fc_unit: 100
-  fc_unit: 200
-  reg_scale: 0.00000001
-  dropout_keep_prob: 0.5
 
   dep_num: 46
   pos_num: 38
@@ -31,12 +28,14 @@ model:
   comp_action_embedding_size: 30
 
 train:
-  batch_size: 5
-  initial_lr: 0.01
-  reg_scale: 0.00000001
+  batch_size: 32
+  initial_lr: 0.1
+  lr_decay: 0.1
+  reg_scale: 0.000001
+
+  max_gradient_norm: 5.0
 
   epoch: 0
   max_epoch: 15
 
   model_dir: '~/big_data/logs/nlp/dependency-parsing/stack-lstm+swap/'
-  save_checkpoints_steps: 2000

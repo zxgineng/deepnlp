@@ -7,7 +7,6 @@ import pickle
 
 from utils import Config, strQ2B
 
-# NULL = "<NULL>"
 UNK = "<UNK>"
 ROOT = "<ROOT>"
 
@@ -46,6 +45,7 @@ class Sentence:
         self.buff = [token for token in self.tokens]
         self.stack = [Token(0, ROOT, ROOT, ROOT, -1)]
         self.history_action = []
+        self.terminate = False
 
     def inorder_traversal(self):
         """get inorder traversal index to convert non-projective to projective"""
@@ -109,14 +109,15 @@ class ArcStandardParser:
         return comp_word_id, comp_pos_id, comp_action_id, comp_action_len
 
     def extract_from_current_state(self, sentence):
-        comp_word_id, comp_pos_id, comp_action_id, comp_action_len = self.extract_from_composition(sentence)  # comp include stack word
+        comp_word_id, comp_pos_id, comp_action_id, comp_action_len = self.extract_from_composition(
+            sentence)  # comp include stack word
         buff_token = sentence.buff
         history_action_id = sentence.history_action
 
         buff_word_id = [self.vocab.get(token.word, self.vocab[UNK]) for token in buff_token[::-1]]  # reversed
         buff_pos_id = [self.pos_dict[token.pos] for token in buff_token[::-1]]  # reversed
 
-        return comp_word_id, comp_pos_id,  comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id
+        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id
 
     def get_legal_transitions(self, sentence):
         """check legality of shift, swap, left reduce, right reduce"""
@@ -174,6 +175,9 @@ class ArcStandardParser:
 
         head.comp_history.extend(dependent.comp_history + [head, dependent])
         head.comp_action.extend(dependent.comp_action + [transition - 2])
+
+        dependent.head_id = head.token_id  # store head
+        dependent.dep = (transition - 2) // 2  # store dep
 
     def terminal(self, sentence):
         if len(sentence.stack) == 1 and sentence.stack[0].word == ROOT and sentence.buff == []:
@@ -271,22 +275,6 @@ def load_vocab():
     return {word: i for i, word in enumerate(words)}
 
 
-# def load_comp_action(dict):
-#     comp_action_dict = {}
-#     for i, dep in enumerate(dict):
-#         for j, direction in enumerate(['left', 'right']):
-#             comp_action_dict[direction + '-' + dep] = 2 * i + j
-#     return comp_action_dict
-#
-#
-# def load_history_action(dict):
-#     history_action_dict = {'shift': 0, 'swap': 1}
-#     for i, dep in enumerate(dict):
-#         for j, a in enumerate(['left-reduce', 'right-reduce']):
-#             history_action_dict[a + '-' + dep] = 2 + 2 * i + j
-#     return history_action_dict
-
-
 def build_wordvec_pkl():
     file = os.path.join(Config.data.processed_path, Config.data.wordvec_file)
     vocab = load_vocab()
@@ -332,7 +320,7 @@ def pos2id(pos, dict):
 
 
 def dep2id(dep, dict):
-    dep_id = [dict.get(d) for d in dep]
+    dep_id = [dict[d] for d in dep]
     return dep_id
 
 
@@ -341,8 +329,8 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id,
-                       buff_pos_id, history_action_id, transition):
+def convert_to_train_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id,
+                             buff_pos_id, history_action_id, transition):
     """convert one sample to example"""
     data = {
         'buff_word_id': _int64_feature(buff_word_id),
@@ -351,7 +339,6 @@ def convert_to_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_le
         'comp_word_id': _bytes_feature(np.array(comp_word_id, np.int64).tostring()),
         'comp_pos_id': _bytes_feature(np.array(comp_pos_id, np.int64).tostring()),
         'comp_action_id': _bytes_feature(np.array(comp_action_id, np.int64).tostring()),
-        # 'comp_word_len': _int64_feature(comp_word_len),
         'comp_action_len': _int64_feature(comp_action_len),
         'transition': _int64_feature(transition),
         'stack_length': _int64_feature(len(comp_word_id)),
@@ -363,7 +350,20 @@ def convert_to_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_le
     return example
 
 
-def preprocess(serialized):
+def convert_to_eval_example(word, pos, head, dep_id):
+    data = {
+        'pos': _bytes_feature(pos),
+        'head': _int64_feature(head),
+        'dep_id': _int64_feature(dep_id),
+        'word': _bytes_feature(word),
+        'length': _int64_feature(len(pos))
+    }
+    features = tf.train.Features(feature=data)
+    example = tf.train.Example(features=features)
+    return example
+
+
+def preprocess_train(serialized):
     def parse_tfrecord(serialized):
         features = {
             'buff_word_id': tf.VarLenFeature(tf.int64),
@@ -372,7 +372,6 @@ def preprocess(serialized):
             'comp_word_id': tf.FixedLenFeature([], tf.string),
             'comp_pos_id': tf.FixedLenFeature([], tf.string),
             'comp_action_id': tf.FixedLenFeature([], tf.string),
-            # 'comp_word_len': tf.VarLenFeature(tf.int64),
             'comp_action_len': tf.VarLenFeature(tf.int64),
             'transition': tf.FixedLenFeature([], tf.int64),
             'stack_length': tf.FixedLenFeature([], tf.int64),
@@ -388,7 +387,6 @@ def preprocess(serialized):
         buff_length = parsed_example['buff_length']
         history_action_length = parsed_example['history_action_length']
         comp_action_len = tf.sparse_tensor_to_dense(parsed_example['comp_action_len'])
-        # comp_word_len = tf.sparse_tensor_to_dense(parsed_example['comp_word_len'])
 
         comp_word_id = tf.decode_raw(parsed_example['comp_word_id'], tf.int64)
         comp_word_id = tf.reshape(comp_word_id, tf.stack([stack_length, -1]))
@@ -403,16 +401,33 @@ def preprocess(serialized):
     return parse_tfrecord(serialized)
 
 
-def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
-    with tf.name_scope(scope):
+def preprocess_eval(serialized):
+    def parse_tfrecord(serialized):
+        features = {
+            'word': tf.VarLenFeature(tf.string),
+            'pos': tf.VarLenFeature(tf.string),
+            'head': tf.VarLenFeature(tf.int64),
+            'dep_id': tf.VarLenFeature(tf.int64),
+            'length': tf.FixedLenFeature([],tf.int64)
+        }
+        parsed_example = tf.parse_single_example(serialized=serialized, features=features)
+        word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
+        pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
+        head = tf.sparse_tensor_to_dense(parsed_example['head'])
+        dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
+        length = parsed_example['length']
+        return word, pos, head, dep_id,length
+
+    return parse_tfrecord(serialized)
+
+
+def get_train_batch(data, buffer_size=1, batch_size=64):
+    with tf.name_scope('train'):
         data = np.random.permutation(data)
         dataset = tf.data.TFRecordDataset(data)
-        dataset = dataset.map(preprocess)
+        dataset = dataset.map(preprocess_train)
 
-        if scope == "train":
-            dataset = dataset.repeat(None)  # Infinite iterations
-        else:
-            dataset = dataset.repeat(1)  # 1 Epoch
+        dataset = dataset.repeat(1)  # 1 Epoch
         dataset = dataset.shuffle(buffer_size=buffer_size)
         dataset = dataset.padded_batch(batch_size,
                                        ([-1], [-1], [-1], [-1, -1], [-1, -1], [-1, -1], [-1], [], [], [], []))
@@ -439,13 +454,36 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train"):
 
     return input
 
+def get_eval_batch(data, buffer_size=1, batch_size=64):
+    with tf.name_scope('eval'):
+        dataset = tf.data.TFRecordDataset(data)
+        dataset = dataset.map(preprocess_eval)
+
+        dataset = dataset.repeat(1)  # 1 Epoch
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1],[]))
+        iterator = iter(dataset)
+
+    def input():
+        next_batch = next(iterator)
+        word = next_batch[0]
+        pos = next_batch[1]
+        head = next_batch[2]
+        dep_id = next_batch[3]
+        length = next_batch[4]
+
+        return {'word': word, 'pos': pos,'length':length}, {'head': head, 'dep_id': dep_id}
+
+    return input
+
+
 
 def create_tfrecord():
     train_file = os.path.join(Config.data.dataset_path, Config.data.train_data)
     train_data = build_and_read_train(train_file)
     test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
     test_data = read_test(test_file)
-    build_wordvec_pkl()
+    # build_wordvec_pkl()
     pos_dict = load_pos()
     dep_dict = load_dep()
     parser = ArcStandardParser()
@@ -480,30 +518,43 @@ def create_tfrecord():
                         print('\nskip wrong data %d' % (i + 1))
                         i += 1
                         continue
-                    while True:
-                        comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id \
-                            = parser.extract_from_current_state(sen)
-                        legal_transitions = parser.get_legal_transitions(sen)
-                        transition = parser.get_oracle_from_current_state(sen)
-                        if transition is None:
-                            print('\nerror')
-                            continue
-                        assert legal_transitions[transition] == 1, 'oracle is illegal'
-                        if transition not in [0, 1]:
-                            parser.update_composition(sen, transition)  # update composition
-                        parser.update_state_by_transition(sen, transition)  # update stack and buff
-                        example = convert_to_example(comp_word_id, comp_pos_id,comp_action_id,
-                                                     comp_action_len, buff_word_id, buff_pos_id, history_action_id,
-                                                     transition)
+                    if data == train_data:
+                        while True:
+                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id \
+                                = parser.extract_from_current_state(sen)
+                            legal_transitions = parser.get_legal_transitions(sen)
+                            transition = parser.get_oracle_from_current_state(sen)
+                            if transition is None:
+                                print('\nerror')
+                                continue
+                            assert legal_transitions[transition] == 1, 'oracle is illegal'
+                            if transition not in [0, 1]:
+                                parser.update_composition(sen, transition)  # update composition
+                            parser.update_state_by_transition(sen, transition)  # update stack and buff
+                            example = convert_to_train_example(comp_word_id, comp_pos_id, comp_action_id,
+                                                               comp_action_len, buff_word_id, buff_pos_id,
+                                                               history_action_id,
+                                                               transition)
+                            serialized = example.SerializeToString()
+                            tfrecord_writer.write(serialized)
+                            i += 1
+                            j += 1
+
+                            if parser.terminal(sen):
+                                break
+                        if j >= 5000:  # totally shuffled
+                            break
+                    else:
+
+                        word = [t.word.encode() for t in sen.tokens]
+                        pos = [t.pos.encode() for t in sen.tokens]
+                        head = [t.head_id for t in sen.tokens]
+                        dep_id = dep2id([t.dep for t in sen.tokens], dep_dict)
+                        example = convert_to_eval_example(word, pos, head, dep_id)
                         serialized = example.SerializeToString()
                         tfrecord_writer.write(serialized)
                         i += 1
-                        j += 1
 
-                        if parser.terminal(sen):
-                            break
-                    if j >= 5000 and data == train_data:  # totally shuffled
-                        break
                 fidx += 1
             print('\n%s complete' % tf_file)
 

@@ -8,66 +8,39 @@ from utils import Config
 
 
 def run(mode):
-    model = Model()
-    # estimator = tf.estimator.Estimator(
-    #     model_fn=model.model_fn,
-    #     model_dir=Config.train.model_dir,
-    #     config=run_config)
+    model = Model(model_dir=Config.train.model_dir,
+                  log_step_count_steps=100)
 
     if mode == 'train':
 
         train_data = data_loader.get_tfrecord('train')
         val_data = data_loader.get_tfrecord('test')
-        train_input_fn = data_loader.get_dataset_batch(train_data, buffer_size=5000,
-                                                                         batch_size=Config.train.batch_size,
-                                                                         scope="val")
+        train_input_fn = data_loader.get_train_batch(train_data, buffer_size=5000,
+                                                     batch_size=Config.train.batch_size)
+        val_input_fn = data_loader.get_eval_batch(val_data, batch_size=32)
+
+        while True:
+            print('*' * 40)
+            print("epoch", Config.train.epoch + 1, 'start')
+            print('*' * 40)
+
+            model.train(train_input_fn)
+            model.evaluate(val_input_fn)
+
+            Config.train.epoch += 1
+            if Config.train.epoch == Config.train.max_epoch:
+                break
+
+    elif mode == 'eval':
+        val_data = data_loader.get_tfrecord('test')
+        val_input_fn = data_loader.get_eval_batch(val_data, batch_size=32)
+        model.evaluate(val_input_fn)
 
 
-        val_input_fn = data_loader.get_dataset_batch(val_data, batch_size=128, scope="val")
-
-        model.train(train_input_fn)
-        # model.evaluate(val_input_fn)
-
-
-
-
-    # if mode == 'train':
-    #
-    #     train_data = data_loader.get_tfrecord('train')
-    #     val_data = data_loader.get_tfrecord('test')
-    #     train_input_fn, train_input_hook = data_loader.get_dataset_batch(train_data, buffer_size=5000,
-    #                                                                      batch_size=Config.train.batch_size,
-    #                                                                      scope="val")
-    #
-    #     val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=128, scope="val")
-    #
-    #
-    #     while True:
-    #         print('*' * 40)
-    #         print("epoch", Config.train.epoch + 1, 'start')
-    #         print('*' * 40)
-    #
-    #         estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
-    #         estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
-    #
-    #         Config.train.epoch += 1
-    #         if Config.train.epoch == Config.train.max_epoch:
-    #             break
-    #
-    # elif mode == 'eval':
-    #     val_data = data_loader.get_tfrecord('test')
-    #     val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=128, scope="val")
-    #     estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
 def main(mode):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-
-    # run_config = tf.estimator.RunConfig(
-    #     model_dir=Config.train.model_dir,
-    #     session_config=config,
-    #     save_checkpoints_steps=Config.train.save_checkpoints_steps,
-    #     log_step_count_steps=None)
 
     run(mode)
 
