@@ -5,9 +5,6 @@ data:
   train_data: 'train.conll'
   test_data: 'test.conll'
 
-  num_stack_word: 3
-  children_stack_range: 2
-
   vocab_file: 'vocab.txt'
   pos_file: 'pos.txt'
   dep_file: 'dep.txt'
@@ -17,15 +14,15 @@ data:
 model:
   lstm_unit: 100
   lstm_layer_num: 2
-  embedding_fc_unit: 100
+  embedding_fc_unit: 50
 
   dep_num: 46
   pos_num: 38
 
   word_embedding_size: 300
-  pos_embedding_size: 30
-  history_action_embedding_size: 30
-  comp_action_embedding_size: 30
+  pos_embedding_size: 20
+  history_action_embedding_size: 20
+  comp_action_embedding_size: 20
 
 train:
   batch_size: 32
@@ -36,6 +33,8 @@ train:
   max_gradient_norm: 5.0
 
   epoch: 0
-  max_epoch: 15
+  max_epoch: 10
 
   model_dir: '~/big_data/logs/nlp/dependency-parsing/stack-lstm+swap/'
+
+  save_checkpoints_steps: 2000

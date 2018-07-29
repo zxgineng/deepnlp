@@ -9,7 +9,8 @@ from utils import Config
 
 def run(mode):
     model = Model(model_dir=Config.train.model_dir,
-                  log_step_count_steps=100)
+                  log_step_count_steps=100,
+                  save_checkpoints_steps=Config.train.save_checkpoints_steps)
 
     if mode == 'train':
 
@@ -37,11 +38,11 @@ def run(mode):
         model.evaluate(val_input_fn)
 
 
-
 def main(mode):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
+    tf.enable_eager_execution(config)
     run(mode)
 
 
@@ -64,5 +65,5 @@ if __name__ == '__main__':
         print("Config Description")
         for key, value in Config.description.items():
             print(f" - {key}: {value}")
-    tf.enable_eager_execution()
+
     main(args.mode)

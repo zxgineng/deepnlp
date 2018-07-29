@@ -37,6 +37,7 @@ class Graph(tf.keras.Model):
 
     def _embedding(self, buff_word_id, buff_pos_id, comp_word_id, comp_pos_id, comp_action_id, comp_action_len,
                    history_action_id):
+
         buff_pos_embedded = self.p_embedding(buff_pos_id)
         comp_pos_embedded = self.p_embedding(comp_pos_id)
         comp_action_embedded = self.comp_a_embedding(comp_action_id)
@@ -69,6 +70,7 @@ class Graph(tf.keras.Model):
                         new_embedded = self.recurse_dense(tf.expand_dims(tf.concat([head_e, rel_e, dep_e], -1), 0))[0]
                         embedding_dict[head_id] = new_embedded
                     new_sample_stack_embedded.append(new_embedded)
+
             new_batch_stack_embedded.append(tf.stack(new_sample_stack_embedded))
         stack_embedded = tf.stack(new_batch_stack_embedded)
 

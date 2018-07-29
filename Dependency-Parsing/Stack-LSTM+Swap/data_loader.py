@@ -106,10 +106,10 @@ class ArcStandardParser:
             comp_pos_id[i] = comp_pos_id[i] + [0] * (max(comp_word_len) - len(comp_pos_id[i]))
             comp_action_id[i] = comp_action_id[i] + [0] * (max(comp_action_len) - len(comp_action_id[i]))
 
-        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len
+        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len,max(comp_word_len)
 
     def extract_from_current_state(self, sentence):
-        comp_word_id, comp_pos_id, comp_action_id, comp_action_len = self.extract_from_composition(
+        comp_word_id, comp_pos_id, comp_action_id, comp_action_len,max_comp_word_len = self.extract_from_composition(
             sentence)  # comp include stack word
         buff_token = sentence.buff
         history_action_id = sentence.history_action
@@ -117,7 +117,7 @@ class ArcStandardParser:
         buff_word_id = [self.vocab.get(token.word, self.vocab[UNK]) for token in buff_token[::-1]]  # reversed
         buff_pos_id = [self.pos_dict[token.pos] for token in buff_token[::-1]]  # reversed
 
-        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id
+        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id,max_comp_word_len
 
     def get_legal_transitions(self, sentence):
         """check legality of shift, swap, left reduce, right reduce"""
@@ -520,7 +520,7 @@ def create_tfrecord():
                         continue
                     if data == train_data:
                         while True:
-                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id \
+                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id,max_comp_word_len \
                                 = parser.extract_from_current_state(sen)
                             legal_transitions = parser.get_legal_transitions(sen)
                             transition = parser.get_oracle_from_current_state(sen)
@@ -537,11 +537,11 @@ def create_tfrecord():
                                                                transition)
                             serialized = example.SerializeToString()
                             tfrecord_writer.write(serialized)
-                            i += 1
-                            j += 1
 
+                            j += 1
                             if parser.terminal(sen):
                                 break
+                        i += 1
                         if j >= 5000:  # totally shuffled
                             break
                     else:

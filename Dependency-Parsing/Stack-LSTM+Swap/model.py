@@ -55,7 +55,12 @@ class Model:
                     tf.logging.info(
                         'loss = %.3f, step = %d (%.3f sec)' % (float(loss), global_step, float(interval)))
 
+                if int((global_step - last_log_step)) % self.config.get('save_checkpoints_steps', 2000) == 0:
+                    checkpoint.save(ckpt_prefix)
+                    tf.logging.info('Saving checkpoints for %d into %s.' % (global_step, ckpt_prefix))
+
             checkpoint.save(ckpt_prefix)
+            tf.logging.info('Saving checkpoints for %d into %s.' % (global_step, ckpt_prefix))
 
     def evaluate(self, input_fn):
         summary_writer = tf.contrib.summary.create_file_writer(os.path.join(self.config['model_dir'], 'eval'))
@@ -71,6 +76,7 @@ class Model:
 
         with summary_writer.as_default():
             while True:
+                print(111)
                 try:
                     inputs, targets = input_fn()
                 except StopIteration:
@@ -88,11 +94,11 @@ class Model:
 
                 while True:
                     batch_comp_word_id, batch_comp_pos_id, batch_comp_action_id, batch_comp_action_len, batch_buff_word_id, \
-                    batch_buff_pos_id, batch_history_action_id, stack_length, buff_length, history_action_length = \
-                        [], [], [], [], [], [], [], [], [], []
+                    batch_buff_pos_id, batch_history_action_id, stack_length, buff_length, history_action_length, max_word_len = \
+                        [], [], [], [], [], [], [], [], [], [], []
                     for sen in total_sen:
                         if not sen.terminate:
-                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id \
+                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id, max_comp_word_len \
                                 = parser.extract_from_current_state(sen)
                             batch_comp_word_id.append(comp_word_id)
                             batch_comp_pos_id.append(comp_pos_id)
@@ -104,16 +110,30 @@ class Model:
                             stack_length.append(len(comp_word_id))
                             buff_length.append(len(buff_word_id))
                             history_action_length.append(len(history_action_id))
+                            max_word_len.append(max_comp_word_len)
 
-                    batch_comp_word_id = tf.convert_to_tensor(
-                        tf.keras.preprocessing.sequence.pad_sequences(batch_comp_word_id, dtype='int64',
-                                                                      padding='post'))
-                    batch_comp_pos_id = tf.convert_to_tensor(
-                        tf.keras.preprocessing.sequence.pad_sequences(batch_comp_pos_id, dtype='int64',
-                                                                      padding='post'))
-                    batch_comp_action_id = tf.convert_to_tensor(
-                        tf.keras.preprocessing.sequence.pad_sequences(batch_comp_action_id, dtype='int64',
-                                                                      padding='post'))
+                    max_stack_length = max(stack_length)
+                    max_comp_word_len = max(max_word_len)
+                    max_action_len = max(sum(batch_comp_action_len, []) + [1])
+                    for i, _ in enumerate(stack_length):
+                        for j, _ in enumerate(batch_comp_action_len[i]):
+                            batch_comp_word_id[i][j] = batch_comp_word_id[i][j] + [0] * (
+                                        max_comp_word_len - len(batch_comp_word_id[i][j]))
+                            batch_comp_pos_id[i][j] = batch_comp_pos_id[i][j] + [0] * (
+                                        max_comp_word_len - len(batch_comp_pos_id[i][j]))
+                            batch_comp_action_id[i][j] = batch_comp_action_id[i][j] + [0] * (
+                                        max_action_len - len(batch_comp_action_id[i][j]))
+                        batch_comp_word_id[i] = batch_comp_word_id[i] + [[0] * max_comp_word_len] * (
+                                    max_stack_length - len(batch_comp_word_id[i]))
+                        batch_comp_pos_id[i] = batch_comp_pos_id[i] + [[0] * max_comp_word_len] * (
+                                    max_stack_length - len(batch_comp_pos_id[i]))
+                        batch_comp_action_id[i] = batch_comp_action_id[i] + [[0] * max_action_len] * (
+                                    max_stack_length - len(batch_comp_action_id[i]))
+
+                    batch_comp_word_id = tf.convert_to_tensor(batch_comp_word_id, tf.int64)
+                    batch_comp_pos_id = tf.convert_to_tensor(batch_comp_pos_id, tf.int64)
+                    batch_comp_action_id = tf.convert_to_tensor(batch_comp_action_id, tf.int64)
+
                     batch_comp_action_len = tf.convert_to_tensor(
                         tf.keras.preprocessing.sequence.pad_sequences(batch_comp_action_len, dtype='int64',
                                                                       padding='post'))
@@ -126,6 +146,7 @@ class Model:
                     batch_history_action_id = tf.convert_to_tensor(
                         tf.keras.preprocessing.sequence.pad_sequences(batch_history_action_id, dtype='int64',
                                                                       padding='post'))
+
                     inputs = {'buff_word_id': batch_buff_word_id, 'buff_pos_id': batch_buff_pos_id,
                               'history_action_id': batch_history_action_id,
                               'comp_word_id': batch_comp_word_id, 'comp_pos_id': batch_comp_pos_id,
@@ -135,6 +156,7 @@ class Model:
                               'history_action_length': history_action_length}
 
                     logits = graph(inputs, mode='eval')
+
                     prob = tf.nn.softmax(logits)
 
                     logits_idx = 0
