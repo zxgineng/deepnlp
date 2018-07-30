@@ -42,7 +42,7 @@ def main(mode):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
 
-    tf.enable_eager_execution(config)
+    # tf.enable_eager_execution(config)
     run(mode)
 
 

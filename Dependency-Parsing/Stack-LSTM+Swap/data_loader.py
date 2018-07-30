@@ -4,11 +4,13 @@ import sys
 import numpy as np
 import tensorflow as tf
 import pickle
+import psutil
 
 from utils import Config, strQ2B
 
 UNK = "<UNK>"
 ROOT = "<ROOT>"
+info = psutil.virtual_memory()
 
 
 def _int64_feature(value):
@@ -32,11 +34,33 @@ class Token:
         self.pos = pos
         self.dep = dep
         self.head_id = head_id
-        self.swapped = list()
-        self.left_children = list()
-        self.right_children = list()
-        self.comp_history = []
-        self.comp_action = []
+        self.order = None  # order of levelorder traversal
+        self.pred_dep_id = None
+        self.pred_head_id = None
+        self.swapped = []
+        self.left_children = []  # for inorder_traversal to detect non-projective
+        self.right_children = []  # for inorder_traversal to detect non-projective
+        self.comp_head = None
+        self.comp_dep = None
+        self.comp_rel = None
+
+    def levelorder_traversal(self):
+
+        def recurse(root):
+            tokens = [root]
+            temp = [root]
+            while temp:
+                current = temp.pop(0)
+                if current.comp_dep:
+                    temp.extend([current.comp_dep, current.comp_head])
+                    tokens.extend([current.comp_dep, current.comp_head])
+            return reversed(tokens)
+
+        return recurse(self)
+
+    def reset_children(self):
+        self.left_children = []
+        self.right_children = []
 
 
 class Sentence:
@@ -75,6 +99,7 @@ class Sentence:
         assert len(result) == len(self.tokens)  # wrong data, multiple trees
         for i, token in enumerate(result):
             token.inorder_traversal_idx = i + 1
+            token.reset_children()
 
 
 class ArcStandardParser:
@@ -83,41 +108,42 @@ class ArcStandardParser:
         self.pos_dict = load_pos()
         self.dep_dict = load_dep()
 
-    def extract_from_composition(self, sentence):
-        comp_word_id = []  # [stack_num, max(comp_word_len)]
-        comp_pos_id = []  # [stack_num, max(comp_word_len)]
-        comp_word_len = []  # [stack_num]
-        comp_action_id = []  # [stack_num, max(comp_action_len)]
-        comp_action_len = []  # [stack_num]
+    def extract_composition_tree(self, sentence):
+        tree_tokens = []
+        stack_order = []
         for token in sentence.stack:
-            if token.comp_history:
-                comp_word_id.append(word2id([t.word for t in token.comp_history], self.vocab))
-                comp_pos_id.append(pos2id([t.pos for t in token.comp_history], self.pos_dict))
-                comp_action_id.append(token.comp_action)
-                comp_word_len.append(len(token.comp_history))
-            else:
-                comp_word_id.append(word2id([token.word], self.vocab))  # add self when no composition
-                comp_pos_id.append(pos2id([token.pos], self.pos_dict))
-                comp_action_id.append([0])
-                comp_word_len.append(1)
-            comp_action_len.append(len(token.comp_action))
-        for i, l in enumerate(comp_action_len):
-            comp_word_id[i] = comp_word_id[i] + [0] * (max(comp_word_len) - len(comp_word_id[i]))
-            comp_pos_id[i] = comp_pos_id[i] + [0] * (max(comp_word_len) - len(comp_pos_id[i]))
-            comp_action_id[i] = comp_action_id[i] + [0] * (max(comp_action_len) - len(comp_action_id[i]))
+            tree_tokens.extend(token.levelorder_traversal())
+            stack_order.append(len(tree_tokens) - 1)
 
-        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len,max(comp_word_len)
+        for i, token in enumerate(tree_tokens):
+            token.order = i
+        comp_head_order, comp_dep_order, comp_rel_id, is_leaf = [], [], [], []
+        for token in tree_tokens:
+            if token.comp_rel:
+                comp_head_order.append(token.comp_head.order)
+                comp_dep_order.append(token.comp_dep.order)
+                comp_rel_id.append(token.comp_rel)
+                is_leaf.append(0)
+            else:
+                comp_head_order.append(0)
+                comp_dep_order.append(0)
+                comp_rel_id.append(0)
+                is_leaf.append(1)
+
+        return tree_tokens, comp_head_order, comp_dep_order, comp_rel_id, is_leaf, stack_order
 
     def extract_from_current_state(self, sentence):
-        comp_word_id, comp_pos_id, comp_action_id, comp_action_len,max_comp_word_len = self.extract_from_composition(
-            sentence)  # comp include stack word
+        tree_tokens, comp_head_order, comp_dep_order, comp_rel_id, is_leaf, stack_order = self.extract_composition_tree(
+            sentence)  # comp trees include stack word
         buff_token = sentence.buff
         history_action_id = sentence.history_action
 
+        tree_word_id = [self.vocab.get(token.word, self.vocab[UNK]) for token in tree_tokens]
+        tree_pos_id = [self.pos_dict[token.pos] for token in tree_tokens]
         buff_word_id = [self.vocab.get(token.word, self.vocab[UNK]) for token in buff_token[::-1]]  # reversed
         buff_pos_id = [self.pos_dict[token.pos] for token in buff_token[::-1]]  # reversed
 
-        return comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id,max_comp_word_len
+        return tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, comp_dep_order, comp_rel_id, is_leaf, stack_order
 
     def get_legal_transitions(self, sentence):
         """check legality of shift, swap, left reduce, right reduce"""
@@ -173,11 +199,12 @@ class ArcStandardParser:
             head = sentence.stack[-2]
             dependent = sentence.stack[-1]
 
-        head.comp_history.extend(dependent.comp_history + [head, dependent])
-        head.comp_action.extend(dependent.comp_action + [transition - 2])
+        dependent.pred_head_id = head.token_id  # store pred head
+        dependent.pred_dep_id = (transition - 2) // 2  # store pred dep
 
-        dependent.head_id = head.token_id  # store head
-        dependent.dep = (transition - 2) // 2  # store dep
+        head.comp_head = pickle.loads(pickle.dumps(head, -1))
+        head.comp_dep = dependent
+        head.comp_rel = transition - 2
 
     def terminal(self, sentence):
         if len(sentence.stack) == 1 and sentence.stack[0].word == ROOT and sentence.buff == []:
@@ -217,7 +244,7 @@ def build_and_read_train(file):
                 dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if len(sen) >= 5:
+                if 5 <= len(sen) <= 40:
                     total_sentences.append(Sentence(sen))
                 sen = []
 
@@ -245,7 +272,7 @@ def read_test(file):
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if len(sen) >= 5:
+                if 5 <= len(sen) <= 40:
                     total_sentences.append(Sentence(sen))
                 sen = []
         if len(sen) > 0:
@@ -329,20 +356,24 @@ def id2dep(id, dict):
     return [id2dep[i] for i in id]
 
 
-def convert_to_train_example(comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id,
-                             buff_pos_id, history_action_id, transition):
+def convert_to_train_example(tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order,
+                             comp_dep_order, comp_rel_id, is_leaf, stack_order, transition):
     """convert one sample to example"""
     data = {
+        'tree_word_id': _int64_feature(tree_word_id),
+        'tree_pos_id': _int64_feature(tree_pos_id),
         'buff_word_id': _int64_feature(buff_word_id),
         'buff_pos_id': _int64_feature(buff_pos_id),
         'history_action_id': _int64_feature(history_action_id),
-        'comp_word_id': _bytes_feature(np.array(comp_word_id, np.int64).tostring()),
-        'comp_pos_id': _bytes_feature(np.array(comp_pos_id, np.int64).tostring()),
-        'comp_action_id': _bytes_feature(np.array(comp_action_id, np.int64).tostring()),
-        'comp_action_len': _int64_feature(comp_action_len),
+        'comp_head_order': _int64_feature(comp_head_order),
+        'comp_dep_order': _int64_feature(comp_dep_order),
+        'comp_rel_id': _int64_feature(comp_rel_id),
+        'is_leaf': _int64_feature(is_leaf),
+        'stack_order': _int64_feature(stack_order),
         'transition': _int64_feature(transition),
-        'stack_length': _int64_feature(len(comp_word_id)),
+        'stack_length': _int64_feature(len(stack_order)),
         'buff_length': _int64_feature(len(buff_word_id)),
+        'comp_tree_length': _int64_feature(len(tree_word_id)),
         'history_action_length': _int64_feature(len(history_action_id))
     }
     features = tf.train.Features(feature=data)
@@ -366,37 +397,41 @@ def convert_to_eval_example(word, pos, head, dep_id):
 def preprocess_train(serialized):
     def parse_tfrecord(serialized):
         features = {
+            'tree_word_id': tf.VarLenFeature(tf.int64),
+            'tree_pos_id': tf.VarLenFeature(tf.int64),
             'buff_word_id': tf.VarLenFeature(tf.int64),
             'buff_pos_id': tf.VarLenFeature(tf.int64),
             'history_action_id': tf.VarLenFeature(tf.int64),
-            'comp_word_id': tf.FixedLenFeature([], tf.string),
-            'comp_pos_id': tf.FixedLenFeature([], tf.string),
-            'comp_action_id': tf.FixedLenFeature([], tf.string),
-            'comp_action_len': tf.VarLenFeature(tf.int64),
+            'comp_head_order': tf.VarLenFeature(tf.int64),
+            'comp_dep_order': tf.VarLenFeature(tf.int64),
+            'comp_rel_id': tf.VarLenFeature(tf.int64),
+            'is_leaf': tf.VarLenFeature(tf.int64),
+            'stack_order': tf.VarLenFeature(tf.int64),
             'transition': tf.FixedLenFeature([], tf.int64),
             'stack_length': tf.FixedLenFeature([], tf.int64),
             'buff_length': tf.FixedLenFeature([], tf.int64),
+            'comp_tree_length': tf.FixedLenFeature([], tf.int64),
             'history_action_length': tf.FixedLenFeature([], tf.int64),
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
+        tree_word_id = tf.sparse_tensor_to_dense(parsed_example['tree_word_id'])
+        tree_pos_id = tf.sparse_tensor_to_dense(parsed_example['tree_pos_id'])
         buff_word_id = tf.sparse_tensor_to_dense(parsed_example['buff_word_id'])
         buff_pos_id = tf.sparse_tensor_to_dense(parsed_example['buff_pos_id'])
         history_action_id = tf.sparse_tensor_to_dense(parsed_example['history_action_id'])
+        comp_head_order = tf.sparse_tensor_to_dense(parsed_example['comp_head_order'])
+        comp_dep_order = tf.sparse_tensor_to_dense(parsed_example['comp_dep_order'])
+        comp_rel_id = tf.sparse_tensor_to_dense(parsed_example['comp_rel_id'])
+        is_leaf = tf.sparse_tensor_to_dense(parsed_example['is_leaf'])
+        stack_order = tf.sparse_tensor_to_dense(parsed_example['stack_order'])
         stack_length = parsed_example['stack_length']
         transition = parsed_example['transition']
         buff_length = parsed_example['buff_length']
+        comp_tree_length = parsed_example['comp_tree_length']
         history_action_length = parsed_example['history_action_length']
-        comp_action_len = tf.sparse_tensor_to_dense(parsed_example['comp_action_len'])
 
-        comp_word_id = tf.decode_raw(parsed_example['comp_word_id'], tf.int64)
-        comp_word_id = tf.reshape(comp_word_id, tf.stack([stack_length, -1]))
-        comp_pos_id = tf.decode_raw(parsed_example['comp_pos_id'], tf.int64)
-        comp_pos_id = tf.reshape(comp_pos_id, tf.stack([stack_length, -1]))
-        comp_action_id = tf.decode_raw(parsed_example['comp_action_id'], tf.int64)
-        comp_action_id = tf.reshape(comp_action_id, tf.stack([stack_length, -1]))
-
-        return buff_word_id, buff_pos_id, history_action_id, comp_word_id, comp_pos_id, \
-               comp_action_id, comp_action_len, transition, stack_length, buff_length, history_action_length
+        return tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, comp_dep_order, \
+               comp_rel_id, is_leaf, stack_order, transition, stack_length, buff_length, comp_tree_length, history_action_length
 
     return parse_tfrecord(serialized)
 
@@ -408,7 +443,7 @@ def preprocess_eval(serialized):
             'pos': tf.VarLenFeature(tf.string),
             'head': tf.VarLenFeature(tf.int64),
             'dep_id': tf.VarLenFeature(tf.int64),
-            'length': tf.FixedLenFeature([],tf.int64)
+            'length': tf.FixedLenFeature([], tf.int64)
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
@@ -416,66 +451,104 @@ def preprocess_eval(serialized):
         head = tf.sparse_tensor_to_dense(parsed_example['head'])
         dep_id = tf.sparse_tensor_to_dense(parsed_example['dep_id'])
         length = parsed_example['length']
-        return word, pos, head, dep_id,length
+        return word, pos, head, dep_id, length
 
     return parse_tfrecord(serialized)
 
 
-def get_train_batch(data, buffer_size=1, batch_size=64):
-    with tf.name_scope('train'):
-        data = np.random.permutation(data)
-        dataset = tf.data.TFRecordDataset(data)
-        dataset = dataset.map(preprocess_train)
+def get_train_batch(data, buffer_size=1, batch_size=64, scope="train"):
+    class IteratorInitializerHook(tf.train.SessionRunHook):
 
-        dataset = dataset.repeat(1)  # 1 Epoch
-        dataset = dataset.shuffle(buffer_size=buffer_size)
-        dataset = dataset.padded_batch(batch_size,
-                                       ([-1], [-1], [-1], [-1, -1], [-1, -1], [-1, -1], [-1], [], [], [], []))
-        iterator = iter(dataset)
+        def __init__(self):
+            self.iterator_initializer_func = None
 
-    def input():
-        next_batch = next(iterator)
-        buff_word_id = next_batch[0]
-        buff_pos_id = next_batch[1]
-        history_action_id = next_batch[2]
-        comp_word_id = next_batch[3]
-        comp_pos_id = next_batch[4]
-        comp_action_id = next_batch[5]
-        comp_action_len = next_batch[6]
-        transition = next_batch[7]
-        stack_length = next_batch[8]
-        buff_length = next_batch[9]
-        history_action_length = next_batch[10]
+        def after_create_session(self, session, coord):
+            self.iterator_initializer_func(session)
 
-        return {'buff_word_id': buff_word_id, 'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
-                'comp_word_id': comp_word_id, 'comp_pos_id': comp_pos_id, 'comp_action_id': comp_action_id,
-                'comp_action_len': comp_action_len, 'stack_length': stack_length, 'buff_length': buff_length,
-                'history_action_length': history_action_length}, {'transition': transition}
+    iterator_initializer_hook = IteratorInitializerHook()
 
-    return input
+    def inputs():
+        with tf.name_scope(scope):
+            input_placeholder = tf.placeholder(tf.string)
+            dataset = tf.data.TFRecordDataset(input_placeholder)
+            dataset = dataset.map(preprocess_train)
+
+            if scope == "train":
+                dataset = dataset.repeat(None)  # Infinite iterations
+            else:
+                dataset = dataset.repeat(1)  # 1 Epoch
+            dataset = dataset.shuffle(buffer_size=buffer_size)
+            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1],
+                                                        [], [], [], [], []))
+            iterator = dataset.make_initializable_iterator()
+            next_batch = iterator.get_next()
+            tree_word_id = next_batch[0]
+            tree_pos_id = next_batch[1]
+            buff_word_id = next_batch[2]
+            buff_pos_id = next_batch[3]
+            history_action_id = next_batch[4]
+            comp_head_order = next_batch[5]
+            comp_dep_order = next_batch[6]
+            comp_rel_id = next_batch[7]
+            is_leaf = next_batch[8]
+            stack_order = next_batch[9]
+            transition = next_batch[10]
+            stack_length = next_batch[11]
+            buff_length = next_batch[12]
+            comp_tree_length = next_batch[13]
+            history_action_length = next_batch[14]
+
+            iterator_initializer_hook.iterator_initializer_func = \
+                lambda sess: sess.run(
+                    iterator.initializer,
+                    feed_dict={input_placeholder: np.random.permutation(data)})
+
+            return {'tree_word_id': tree_word_id, 'tree_pos_id': tree_pos_id, 'buff_word_id': buff_word_id,
+                    'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
+                    'comp_head_order': comp_head_order, 'comp_dep_order': comp_dep_order, 'comp_rel_id': comp_rel_id,
+                    'is_leaf': is_leaf, 'stack_order': stack_order, 'stack_length': stack_length,
+                    'buff_length': buff_length, 'comp_tree_length': comp_tree_length,
+                    'history_action_length': history_action_length}, {'transition': transition}
+
+    return inputs, iterator_initializer_hook
+
 
 def get_eval_batch(data, buffer_size=1, batch_size=64):
-    with tf.name_scope('eval'):
-        dataset = tf.data.TFRecordDataset(data)
-        dataset = dataset.map(preprocess_eval)
+    class IteratorInitializerHook(tf.train.SessionRunHook):
 
-        dataset = dataset.repeat(1)  # 1 Epoch
-        dataset = dataset.shuffle(buffer_size=buffer_size)
-        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1],[]))
-        iterator = iter(dataset)
+        def __init__(self):
+            self.iterator_initializer_func = None
 
-    def input():
-        next_batch = next(iterator)
-        word = next_batch[0]
-        pos = next_batch[1]
-        head = next_batch[2]
-        dep_id = next_batch[3]
-        length = next_batch[4]
+        def after_create_session(self, session, coord):
+            self.iterator_initializer_func(session)
 
-        return {'word': word, 'pos': pos,'length':length}, {'head': head, 'dep_id': dep_id}
+    iterator_initializer_hook = IteratorInitializerHook()
 
-    return input
+    def inputs():
+        with tf.name_scope('eval'):
+            input_placeholder = tf.placeholder(tf.string)
+            dataset = tf.data.TFRecordDataset(input_placeholder)
+            dataset = dataset.map(preprocess_eval)
 
+            dataset = dataset.repeat(1)  # 1 Epoch
+            dataset = dataset.shuffle(buffer_size=buffer_size)
+            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], []))
+            iterator = dataset.make_initializable_iterator()
+            next_batch = iterator.get_next()
+            word = next_batch[0]
+            pos = next_batch[1]
+            head = next_batch[2]
+            dep_id = next_batch[3]
+            length = next_batch[4]
+
+            iterator_initializer_hook.iterator_initializer_func = \
+                lambda sess: sess.run(
+                    iterator.initializer,
+                    feed_dict={input_placeholder: np.random.permutation(data)})
+
+            return {'word': word, 'pos': pos, 'length': length}, {'head': head, 'dep_id': dep_id}
+
+    return inputs, iterator_initializer_hook
 
 
 def create_tfrecord():
@@ -518,9 +591,16 @@ def create_tfrecord():
                         print('\nskip wrong data %d' % (i + 1))
                         i += 1
                         continue
+                    if i + 1 == 1260:
+                        i += 1
+                        continue
                     if data == train_data:
                         while True:
-                            comp_word_id, comp_pos_id, comp_action_id, comp_action_len, buff_word_id, buff_pos_id, history_action_id,max_comp_word_len \
+                            if info.percent > 60:
+                                print('not enough RAM, skip data %d' % (i + 1))
+                                break
+                            tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, \
+                            comp_dep_order, comp_rel_id, is_leaf, stack_order \
                                 = parser.extract_from_current_state(sen)
                             legal_transitions = parser.get_legal_transitions(sen)
                             transition = parser.get_oracle_from_current_state(sen)
@@ -531,10 +611,9 @@ def create_tfrecord():
                             if transition not in [0, 1]:
                                 parser.update_composition(sen, transition)  # update composition
                             parser.update_state_by_transition(sen, transition)  # update stack and buff
-                            example = convert_to_train_example(comp_word_id, comp_pos_id, comp_action_id,
-                                                               comp_action_len, buff_word_id, buff_pos_id,
-                                                               history_action_id,
-                                                               transition)
+                            example = convert_to_train_example(tree_word_id, tree_pos_id, buff_word_id, buff_pos_id,
+                                                               history_action_id, comp_head_order, comp_dep_order,
+                                                               comp_rel_id, is_leaf, stack_order, transition)
                             serialized = example.SerializeToString()
                             tfrecord_writer.write(serialized)
 

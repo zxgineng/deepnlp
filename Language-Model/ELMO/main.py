@@ -35,7 +35,7 @@ def run(mode, run_config):
             print('*' * 40)
 
             estimator.train(input_fn=train_input_fn, hooks=[logginghook] + train_input_hook)
-            estimator.evaluate(input_fn=val_input_fn, hooks=[logginghook] + val_input_hook)
+            estimator.evaluate(input_fn=val_input_fn, hooks=val_input_hook)
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
@@ -46,7 +46,7 @@ def run(mode, run_config):
         back_val_data = data_loader.get_tfrecord('back-tfrecord', 'test')
         val_input_fn, val_input_hook = data_loader.get_both_batch(for_val_data, back_val_data, batch_size=20,
                                                                   scope="val")
-        estimator.evaluate(input_fn=val_input_fn, hooks=[logginghook] + val_input_hook)
+        estimator.evaluate(input_fn=val_input_fn, hooks=val_input_hook)
 
 
 def main(mode):
