@@ -4,13 +4,11 @@ import sys
 import numpy as np
 import tensorflow as tf
 import pickle
-import psutil
 
 from utils import Config, strQ2B
 
 UNK = "<UNK>"
 ROOT = "<ROOT>"
-info = psutil.virtual_memory()
 
 
 def _int64_feature(value):
@@ -596,9 +594,6 @@ def create_tfrecord():
                         continue
                     if data == train_data:
                         while True:
-                            if info.percent > 60:
-                                print('not enough RAM, skip data %d' % (i + 1))
-                                break
                             tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, \
                             comp_dep_order, comp_rel_id, is_leaf, stack_order \
                                 = parser.extract_from_current_state(sen)
