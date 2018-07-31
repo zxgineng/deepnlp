@@ -242,7 +242,7 @@ def build_and_read_train(file):
                 dep.add(d)
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if 5 <= len(sen) <= 40:
+                if 5 <= len(sen) <= 30:
                     total_sentences.append(Sentence(sen))
                 sen = []
 
@@ -270,7 +270,7 @@ def read_test(file):
                 i, w, _, p, _, _, h, d, _, _ = line.split()
                 sen.append(Token(int(i), w, p, d, int(h)))
             else:
-                if 5 <= len(sen) <= 40:
+                if 5 <= len(sen) <= 30:
                     total_sentences.append(Sentence(sen))
                 sen = []
         if len(sen) > 0:
@@ -371,7 +371,6 @@ def convert_to_train_example(tree_word_id, tree_pos_id, buff_word_id, buff_pos_i
         'transition': _int64_feature(transition),
         'stack_length': _int64_feature(len(stack_order)),
         'buff_length': _int64_feature(len(buff_word_id)),
-        'comp_tree_length': _int64_feature(len(tree_word_id)),
         'history_action_length': _int64_feature(len(history_action_id))
     }
     features = tf.train.Features(feature=data)
@@ -408,7 +407,6 @@ def preprocess_train(serialized):
             'transition': tf.FixedLenFeature([], tf.int64),
             'stack_length': tf.FixedLenFeature([], tf.int64),
             'buff_length': tf.FixedLenFeature([], tf.int64),
-            'comp_tree_length': tf.FixedLenFeature([], tf.int64),
             'history_action_length': tf.FixedLenFeature([], tf.int64),
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
@@ -425,11 +423,10 @@ def preprocess_train(serialized):
         stack_length = parsed_example['stack_length']
         transition = parsed_example['transition']
         buff_length = parsed_example['buff_length']
-        comp_tree_length = parsed_example['comp_tree_length']
         history_action_length = parsed_example['history_action_length']
 
         return tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, comp_dep_order, \
-               comp_rel_id, is_leaf, stack_order, transition, stack_length, buff_length, comp_tree_length, history_action_length
+               comp_rel_id, is_leaf, stack_order, transition, stack_length, buff_length, history_action_length
 
     return parse_tfrecord(serialized)
 
@@ -466,54 +463,50 @@ def get_train_batch(data, buffer_size=1, batch_size=64, scope="train"):
     iterator_initializer_hook = IteratorInitializerHook()
 
     def inputs():
-        with tf.name_scope(scope):
-            input_placeholder = tf.placeholder(tf.string)
-            dataset = tf.data.TFRecordDataset(input_placeholder)
-            dataset = dataset.map(preprocess_train)
+        input_placeholder = tf.placeholder(tf.string)
+        dataset = tf.data.TFRecordDataset(input_placeholder)
+        dataset = dataset.map(preprocess_train)
 
-            if scope == "train":
-                dataset = dataset.repeat(None)  # Infinite iterations
-            else:
-                dataset = dataset.repeat(1)  # 1 Epoch
-            dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1],
-                                                        [], [], [], [], []))
-            iterator = dataset.make_initializable_iterator()
-            next_batch = iterator.get_next()
-            tree_word_id = next_batch[0]
-            tree_pos_id = next_batch[1]
-            buff_word_id = next_batch[2]
-            buff_pos_id = next_batch[3]
-            history_action_id = next_batch[4]
-            comp_head_order = next_batch[5]
-            comp_dep_order = next_batch[6]
-            comp_rel_id = next_batch[7]
-            is_leaf = next_batch[8]
-            stack_order = next_batch[9]
-            transition = next_batch[10]
-            stack_length = next_batch[11]
-            buff_length = next_batch[12]
-            comp_tree_length = next_batch[13]
-            history_action_length = next_batch[14]
+        if scope == "train":
+            dataset = dataset.repeat(None)  # Infinite iterations
+        else:
+            dataset = dataset.repeat(1)  # 1 Epoch
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1], [-1],
+                                                    [], [], [], []))
+        iterator = dataset.make_initializable_iterator()
+        next_batch = iterator.get_next('next_batch')
+        tree_word_id = next_batch[0]
+        tree_pos_id = next_batch[1]
+        buff_word_id = next_batch[2]
+        buff_pos_id = next_batch[3]
+        history_action_id = next_batch[4]
+        comp_head_order = next_batch[5]
+        comp_dep_order = next_batch[6]
+        comp_rel_id = next_batch[7]
+        is_leaf = next_batch[8]
+        stack_order = next_batch[9]
+        transition = next_batch[10]
+        stack_length = next_batch[11]
+        buff_length = next_batch[12]
+        history_action_length = next_batch[13]
 
-            iterator_initializer_hook.iterator_initializer_func = \
-                lambda sess: sess.run(
-                    iterator.initializer,
-                    feed_dict={input_placeholder: np.random.permutation(data)})
+        iterator_initializer_hook.iterator_initializer_func = \
+            lambda sess: sess.run(
+                iterator.initializer,
+                feed_dict={input_placeholder: np.random.permutation(data)})
 
-            return {'tree_word_id': tree_word_id, 'tree_pos_id': tree_pos_id, 'buff_word_id': buff_word_id,
-                    'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
-                    'comp_head_order': comp_head_order, 'comp_dep_order': comp_dep_order, 'comp_rel_id': comp_rel_id,
-                    'is_leaf': is_leaf, 'stack_order': stack_order, 'stack_length': stack_length,
-                    'buff_length': buff_length, 'comp_tree_length': comp_tree_length,
-                    'history_action_length': history_action_length}, {'transition': transition}
+        return {'tree_word_id': tree_word_id, 'tree_pos_id': tree_pos_id, 'buff_word_id': buff_word_id,
+                'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
+                'comp_head_order': comp_head_order, 'comp_dep_order': comp_dep_order, 'comp_rel_id': comp_rel_id,
+                'is_leaf': is_leaf, 'stack_order': stack_order, 'stack_length': stack_length,
+                'buff_length': buff_length,'history_action_length': history_action_length}, {'transition': transition}
 
     return inputs, iterator_initializer_hook
 
 
 def get_eval_batch(data, buffer_size=1, batch_size=64):
     class IteratorInitializerHook(tf.train.SessionRunHook):
-
         def __init__(self):
             self.iterator_initializer_func = None
 
@@ -523,28 +516,27 @@ def get_eval_batch(data, buffer_size=1, batch_size=64):
     iterator_initializer_hook = IteratorInitializerHook()
 
     def inputs():
-        with tf.name_scope('eval'):
-            input_placeholder = tf.placeholder(tf.string)
-            dataset = tf.data.TFRecordDataset(input_placeholder)
-            dataset = dataset.map(preprocess_eval)
+        input_placeholder = tf.placeholder(tf.string)
+        dataset = tf.data.TFRecordDataset(input_placeholder)
+        dataset = dataset.map(preprocess_eval)
 
-            dataset = dataset.repeat(1)  # 1 Epoch
-            dataset = dataset.shuffle(buffer_size=buffer_size)
-            dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], []))
-            iterator = dataset.make_initializable_iterator()
-            next_batch = iterator.get_next()
-            word = next_batch[0]
-            pos = next_batch[1]
-            head = next_batch[2]
-            dep_id = next_batch[3]
-            length = next_batch[4]
+        dataset = dataset.repeat(1)  # 1 Epoch
+        dataset = dataset.shuffle(buffer_size=buffer_size)
+        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [-1], []))
+        iterator = dataset.make_initializable_iterator()
+        next_batch = iterator.get_next('next_batch')
+        word = next_batch[0]
+        pos = next_batch[1]
+        head = next_batch[2]
+        dep_id = next_batch[3]
+        length = next_batch[4]
 
-            iterator_initializer_hook.iterator_initializer_func = \
-                lambda sess: sess.run(
-                    iterator.initializer,
-                    feed_dict={input_placeholder: np.random.permutation(data)})
+        iterator_initializer_hook.iterator_initializer_func = \
+            lambda sess: sess.run(
+                iterator.initializer,
+                feed_dict={input_placeholder: data})
 
-            return {'word': word, 'pos': pos, 'length': length}, {'head': head, 'dep_id': dep_id}
+        return {'word': word, 'pos': pos, 'length': length}, {'head': head, 'dep_id': dep_id}
 
     return inputs, iterator_initializer_hook
 

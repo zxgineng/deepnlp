@@ -25,7 +25,7 @@ model:
   comp_action_embedding_size: 20
 
 train:
-  batch_size: 32
+  batch_size: 1024
   initial_lr: 0.1
   lr_decay: 0.1
   reg_scale: 0.000001
@@ -33,7 +33,7 @@ train:
   max_gradient_norm: 5.0
 
   epoch: 0
-  max_epoch: 10
+  max_epoch: 15
 
   model_dir: '~/big_data/logs/nlp/dependency-parsing/stack-lstm+swap/'
 
