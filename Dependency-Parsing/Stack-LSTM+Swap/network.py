@@ -56,7 +56,7 @@ class Graph(tf.keras.Model):
 
     def _recursiveNN(self, tree_embedded, comp_rel_embedded, comp_head_order, comp_dep_order, is_leaf, stack_order):
         recursive_tensors = tf.TensorArray(tf.float32, size=0, dynamic_size=True, clear_after_read=False)
-        recursive_tensors = recursive_tensors.write(0, tree_embedded[:, 0])
+        recursive_tensors_1 = recursive_tensors.write(0, tree_embedded[:, 0])
 
         combine_composition = lambda head, rel, dep: self.recurse_dense(tf.concat([head, rel, dep], -1))
 
@@ -80,11 +80,13 @@ class Graph(tf.keras.Model):
         def cond(i, recursive_tensors):
             return tf.less(i, tree_size)
 
-        [_, recursive_tensors] = tf.while_loop(cond, body, [1, recursive_tensors])
+        [_, recursive_tensors_2] = tf.while_loop(cond, body, [1, recursive_tensors_1])
 
-        result = recursive_tensors.stack()
+        result = recursive_tensors_2.stack()
         # clear TensorArray to avoid size error in next sess.run(size is fixed after first run even dynamic_size=True)
         recursive_tensors.close()
+        recursive_tensors_1.close()
+        recursive_tensors_2.close()
 
         stack_embedded = tf.gather_nd(result, tf.stack(
             [stack_order, tf.ones_like(stack_order) * tf.reshape(tf.range(batch_size, dtype=tf.int64), [-1, 1])], -1))
@@ -92,7 +94,7 @@ class Graph(tf.keras.Model):
         return stack_embedded
 
     def call(self, inputs, mode):
-        if mode == 'train':
+        if mode == tf.estimator.ModeKeys.TRAIN:
             self.is_training = True
         else:
             self.is_training = False

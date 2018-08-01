@@ -14,7 +14,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions,self.evaluation_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.evaluation_hooks = None, None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -26,7 +26,7 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             predictions=self.predictions,
-            evaluation_hooks = self.evaluation_hooks)
+            evaluation_hooks=self.evaluation_hooks)
 
     def build_graph(self):
         graph = Graph()

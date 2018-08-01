@@ -349,6 +349,11 @@ def dep2id(dep, dict):
     return dep_id
 
 
+def id2word(id, dict):
+    id2word = {i: t for i, t in enumerate(dict)}
+    return [id2word[i] for i in id]
+
+
 def id2dep(id, dict):
     id2dep = {i: t for i, t in enumerate(dict)}
     return [id2dep[i] for i in id]
@@ -620,7 +625,6 @@ def create_tfrecord():
                         serialized = example.SerializeToString()
                         tfrecord_writer.write(serialized)
                         i += 1
-
                 fidx += 1
             print('\n%s complete' % tf_file)
 

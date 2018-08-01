@@ -93,9 +93,12 @@ class EvalHook(tf.train.SessionRunHook):
                 if not sen.terminate:
                     legal_transitions = self.parser.get_legal_transitions(sen)
                     transition = np.argmax(np.array(legal_transitions) * prob[idx])
+                    if idx ==1:
+                        print(np.array(legal_transitions) * prob[idx])
                     if transition not in [0, 1]:
                         self.parser.update_composition(sen, transition)  # update composition
                     self.parser.update_state_by_transition(sen, transition)  # update stack and buff
+
                     idx += 1
                     if self.parser.terminal(sen):
                         sen.terminate = True
