@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import EvalHook
+from hooks import EvalHook, PredHook
 
 
 class Model:
@@ -14,7 +14,8 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions, self.evaluation_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.evaluation_hooks, self.prediction_hooks = \
+            None, None, None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -26,7 +27,8 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             predictions=self.predictions,
-            evaluation_hooks=self.evaluation_hooks)
+            evaluation_hooks=self.evaluation_hooks,
+            prediction_hooks=self.prediction_hooks)
 
     def build_graph(self):
         graph = Graph()
@@ -58,8 +60,9 @@ class Model:
             tf.summary.scalar('LAS', dep_acc, ['acc'], 'score')
 
             self.evaluation_hooks = [EvalHook()]
-            prediction = tf.argmax(logits, -1)
-            self.predictions = prediction
+            self.prediction_hooks = [PredHook()]
+            self.predictions = {'pred_head': tf.placeholder(tf.int64, [None, None], name='pred_head'),
+                                'pred_dep': tf.placeholder(tf.int64, [None, None], name='pred_dep')}
 
     def _build_loss(self, logits):
         loss = tf.losses.sparse_softmax_cross_entropy(labels=self.targets['transition'], logits=logits)

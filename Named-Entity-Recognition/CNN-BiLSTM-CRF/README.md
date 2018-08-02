@@ -4,11 +4,12 @@ TensorFlow implementation of [End-to-end Sequence Labeling via Bi-directional LS
 
 ![images](images/architecture.png)
 
-## Requirements
+## Environment
 
-- Python 3
-- TensorFlow 1.5
+- Python 3.6
+- TensorFlow 1.7
 - pygame (build char images)
+- Ubuntu 16.04
 
 
 ## Project Structure

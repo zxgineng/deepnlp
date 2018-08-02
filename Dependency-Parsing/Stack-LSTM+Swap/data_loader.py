@@ -354,6 +354,11 @@ def id2word(id, dict):
     return [id2word[i] for i in id]
 
 
+def id2pos(id, dict):
+    id2pos = {i: t for i, t in enumerate(dict)}
+    return [id2pos[i] for i in id]
+
+
 def id2dep(id, dict):
     id2dep = {i: t for i, t in enumerate(dict)}
     return [id2dep[i] for i in id]
@@ -505,7 +510,7 @@ def get_train_batch(data, buffer_size=1, batch_size=64, scope="train"):
                 'buff_pos_id': buff_pos_id, 'history_action_id': history_action_id,
                 'comp_head_order': comp_head_order, 'comp_dep_order': comp_dep_order, 'comp_rel_id': comp_rel_id,
                 'is_leaf': is_leaf, 'stack_order': stack_order, 'stack_length': stack_length,
-                'buff_length': buff_length,'history_action_length': history_action_length}, {'transition': transition}
+                'buff_length': buff_length, 'history_action_length': history_action_length}, {'transition': transition}
 
     return inputs, iterator_initializer_hook
 
@@ -551,7 +556,7 @@ def create_tfrecord():
     train_data = build_and_read_train(train_file)
     test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
     test_data = read_test(test_file)
-    # build_wordvec_pkl()
+    build_wordvec_pkl()
     pos_dict = load_pos()
     dep_dict = load_dep()
     parser = ArcStandardParser()
@@ -586,9 +591,6 @@ def create_tfrecord():
                         print('\nskip wrong data %d' % (i + 1))
                         i += 1
                         continue
-                    if i + 1 == 1260:
-                        i += 1
-                        continue
                     if data == train_data:
                         while True:
                             tree_word_id, tree_pos_id, buff_word_id, buff_pos_id, history_action_id, comp_head_order, \
@@ -600,16 +602,18 @@ def create_tfrecord():
                                 print('\nerror')
                                 continue
                             assert legal_transitions[transition] == 1, 'oracle is illegal'
-                            if transition not in [0, 1]:
-                                parser.update_composition(sen, transition)  # update composition
-                            parser.update_state_by_transition(sen, transition)  # update stack and buff
+
                             example = convert_to_train_example(tree_word_id, tree_pos_id, buff_word_id, buff_pos_id,
                                                                history_action_id, comp_head_order, comp_dep_order,
                                                                comp_rel_id, is_leaf, stack_order, transition)
                             serialized = example.SerializeToString()
                             tfrecord_writer.write(serialized)
-
                             j += 1
+
+                            if transition not in [0, 1]:
+                                parser.update_composition(sen, transition)  # update composition
+                            parser.update_state_by_transition(sen, transition)  # update stack and buff
+
                             if parser.terminal(sen):
                                 break
                         i += 1

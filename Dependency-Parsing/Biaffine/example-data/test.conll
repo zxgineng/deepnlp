@@ -1,21 +1,3 @@
-1	各位	_	DT	DT	_	2	det	_	_
-2	听众	_	NN	NN	_	3	nsubj	_	_
-3	欢迎	_	VV	VV	_	0	root	_	_
-4	您	_	PN	PN	_	3	dobj	_	_
-5	继续	_	VV	VV	_	6	mmod	_	_
-6	收听	_	VV	VV	_	3	dep	_	_
-7	美国	_	NR	NR	_	9	assmod	_	_
-8	之	_	DEG	DEG	_	7	assm	_	_
-9	音	_	NN	NN	_	16	assmod	_	_
-10	的	_	DEG	DEG	_	9	assm	_	_
-11	中国	_	NR	NR	_	12	nn	_	_
-12	新闻	_	NN	NN	_	15	conj	_	_
-13	与	_	CC	CC	_	15	cc	_	_
-14	世界	_	NN	NN	_	15	nn	_	_
-15	报道	_	NN	NN	_	16	nn	_	_
-16	节目	_	NN	NN	_	6	dobj	_	_
-17	。	_	PU	PU	_	3	punct	_	_
-
 1	在	_	P	P	_	13	prep	_	_
 2	联合国	_	NR	NR	_	3	nn	_	_
 3	秘书长	_	NN	NN	_	4	nn	_	_
@@ -50,4 +32,3 @@
 32	暴力	_	NN	NN	_	33	nn	_	_
 33	冲突	_	NN	NN	_	27	dobj	_	_
 34	。	_	PU	PU	_	13	punct	_	_
-

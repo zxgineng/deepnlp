@@ -4,10 +4,11 @@ TensorFlow implementation of [Convolutional Neural Networks for Sentence Classif
 
 ![images](images/architecture.png)
 
-## Requirements
+## Environment
 
-- Python 3
-- TensorFlow 1.5
+- Python 3.6
+- TensorFlow 1.7
+- Ubuntu 16.04
 
 
 ## Project Structure

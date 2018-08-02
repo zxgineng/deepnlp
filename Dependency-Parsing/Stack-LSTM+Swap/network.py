@@ -55,8 +55,8 @@ class Graph(tf.keras.Model):
         return tree_embedded, buff_embedded, comp_rel_embedded, history_action_embedded
 
     def _recursiveNN(self, tree_embedded, comp_rel_embedded, comp_head_order, comp_dep_order, is_leaf, stack_order):
-        recursive_tensors = tf.TensorArray(tf.float32, size=0, dynamic_size=True, clear_after_read=False)
-        recursive_tensors_1 = recursive_tensors.write(0, tree_embedded[:, 0])
+        recursive_tensors = tf.TensorArray(tf.float32, size=100, dynamic_size=True, clear_after_read=False)
+        recursive_tensors = recursive_tensors.write(0, tree_embedded[:, 0])
 
         combine_composition = lambda head, rel, dep: self.recurse_dense(tf.concat([head, rel, dep], -1))
 
@@ -64,7 +64,7 @@ class Graph(tf.keras.Model):
         tree_size = tf.shape(is_leaf)[1]
 
         def body(i, recursive_tensors):
-            temp = recursive_tensors.stack()  # [i,batch_size]
+            temp = recursive_tensors.gather(tf.range(i))  # [i,batch_size]
             node_is_leaf = tf.cast(is_leaf[:, i], tf.bool)
             head = tf.gather_nd(temp, tf.stack([comp_head_order[:, i], tf.range(batch_size, dtype=tf.int64)], -1))
             rel = comp_rel_embedded[:, i]
@@ -80,13 +80,9 @@ class Graph(tf.keras.Model):
         def cond(i, recursive_tensors):
             return tf.less(i, tree_size)
 
-        [_, recursive_tensors_2] = tf.while_loop(cond, body, [1, recursive_tensors_1])
+        [_, recursive_tensors] = tf.while_loop(cond, body, [1, recursive_tensors])
 
-        result = recursive_tensors_2.stack()
-        # clear TensorArray to avoid size error in next sess.run(size is fixed after first run even dynamic_size=True)
-        recursive_tensors.close()
-        recursive_tensors_1.close()
-        recursive_tensors_2.close()
+        result = recursive_tensors.stack()
 
         stack_embedded = tf.gather_nd(result, tf.stack(
             [stack_order, tf.ones_like(stack_order) * tf.reshape(tf.range(batch_size, dtype=tf.int64), [-1, 1])], -1))

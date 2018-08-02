@@ -5,10 +5,11 @@ using Bidirectional RNN-CRF](https://arxiv.org/pdf/1704.01314.pdf). (2017. 4)
 
 ![images](images/paper.png)
 
-## Requirements
+## Environment
 
-- Python 3
-- TensorFlow 1.5
+- Python 3.6
+- TensorFlow 1.7
+- Ubuntu 16.04
 
 
 ## Project Structure
