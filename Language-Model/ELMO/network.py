@@ -51,7 +51,7 @@ class Graph:
             return outputs
 
     def _lstm(self, inputs):
-        """inputs: [b,s,c]  outputs: [b*s,c]"""
+        """inputs: [b,s,c]  outputs: [b,s,c]"""
         lstm_cells = []
         for i in range(Config.model.lstm_layer_num):
             lstm_cell = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, num_proj=Config.model.embedding_size,
@@ -63,18 +63,10 @@ class Graph:
                 lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, input_keep_prob=Config.model.dropout_keep_prob)
             lstm_cells.append(lstm_cell)
 
-            # inner layer embedding, no run while training
             inner_lstm = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
             outputs, _ = tf.nn.dynamic_rnn(inner_lstm, inputs, dtype=tf.float32)
+            tf.identity(outputs,'lstm_outputs_'+str(i))
 
-        # if Config.model.lstm_layer_num > 1:
-        #     lstm_cell = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
-        # else:
-        #     lstm_cell = lstm_cells[0]
-        lstm_cell = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
-        outputs, _ = tf.nn.dynamic_rnn(lstm_cell, inputs, dtype=tf.float32)
-        tf.identity(outputs, str(Config.model.lstm_layer_num))  # final layer embedding
-        outputs = tf.reshape(outputs, [-1, Config.model.embedding_size])
         outputs = slim.dropout(outputs, Config.model.dropout_keep_prob, is_training=self.is_training)
         return outputs
 
