@@ -76,7 +76,7 @@ class Graph(tf.keras.Model):
         batch_size = tf.shape(children_order, out_type=tf.int64)[0]
         children_num = tf.shape(children_order)[1]
 
-        h_tensors = h_tensors.write(0, tf.zeros(tf.stack([batch_size, Config.model.lstm_unit])))
+        h_tensors = h_tensors.write(0, tf.zeros(tf.stack([batch_size, Config.model.lstm_unit])))  # idx 0 represents no children states
         c_tensors = c_tensors.write(0, tf.zeros(tf.stack([batch_size, Config.model.lstm_unit])))
 
         tree_lstm_one_step = lambda inputs, c, h: self.tree_lstm_cell(inputs, tf.nn.rnn_cell.LSTMStateTuple(c, h))
