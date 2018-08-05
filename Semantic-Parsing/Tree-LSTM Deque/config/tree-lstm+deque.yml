@@ -1,0 +1,38 @@
+data:
+  dataset_path: '~/big_data/dataset/nlp/semantic-parsing/semeval2016/'
+  processed_path: '~/big_data/processed-data/nlp/semantic-parsing/tree-lstm+deque/'
+
+  train_data: ['train_1.conll','train_2.conll']
+  test_data: ['test_1.conll','test_2.conll']
+
+  vocab_file: 'vocab.txt'
+  pos_file: 'pos.txt'
+  dep_file: 'dep.txt'
+  wordvec_file: 'wordvec.txt'
+  wordvec_pkl: 'wordvec.pkl'
+
+model:
+  lstm_unit: 200
+  embedding_fc_unit: 100
+
+  dep_num: 157
+  pos_num: 42
+
+  word_embedding_size: 300
+  pos_embedding_size: 50
+  history_action_embedding_size: 50
+
+train:
+  batch_size: 256
+  initial_lr: 0.1
+  lr_decay: 0.1
+  reg_scale: 0.000001
+
+  max_gradient_norm: 5.0
+
+  epoch: 0
+  max_epoch: 15
+
+  model_dir: '~/big_data/logs/nlp/semantic-parsing/tree-lstm+deque/'
+
+  save_checkpoints_steps: 2000
