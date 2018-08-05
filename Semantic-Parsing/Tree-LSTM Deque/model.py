@@ -57,8 +57,8 @@ class Model:
             self.loss = tf.constant(0)  # the parsing doesn't follow expected transition when eval, loss makes no sense
             uf = tf.placeholder(tf.float32, None, 'uf_ph')
             lf = tf.placeholder(tf.float32, None, 'lf_ph')
-            tf.summary.scalar('UF', uf, ['f_score'], 'score')
-            tf.summary.scalar('LF', lf, ['f_score'], 'score')
+            tf.summary.scalar('U-F-score', uf, ['f_score'], 'score')
+            tf.summary.scalar('L-F-score', lf, ['f_score'], 'score')
 
             self.evaluation_hooks = [EvalHook()]
             prediction = tf.argmax(logits, -1)

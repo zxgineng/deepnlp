@@ -58,7 +58,7 @@ class EvalHook(tf.train.SessionRunHook):
                     batch_children_order.append(children_order)
                     batch_stack_order.append(stack_order)
                     batch_stack_length.append(len(stack_order))
-                    batch_token_length.append(len(batch_token_word_id))
+                    batch_token_length.append(len(token_word_id))
                     batch_history_action_length.append(len(history_action_id))
                     max_children_num.append(max([len(n) for n in children_order]))
 
@@ -78,6 +78,9 @@ class EvalHook(tf.train.SessionRunHook):
                                                                                dtype='int64', padding='post')
             batch_stack_order = tf.keras.preprocessing.sequence.pad_sequences(batch_stack_order,
                                                                               dtype='int64', padding='post')
+            batch_stack_length = np.array(batch_stack_length,np.int64)
+            batch_history_action_length = np.array(batch_history_action_length,np.int64)
+
 
             # pad children order
             max_children_num = max(max_children_num)
@@ -86,6 +89,7 @@ class EvalHook(tf.train.SessionRunHook):
                 [i.extend([0] * (max_children_num - len(i))) for i in c]
                 batch_children_order[n] = batch_children_order[n] + [[0] * max_children_num] * (max_stack_len - len(c))
 
+            batch_children_order = np.array(batch_children_order, np.int64)
             feed_dict = {'tree_word_id:0': batch_tree_word_id, 'tree_pos_id:0': batch_tree_pos_id,
                          'token_word_id:0': batch_token_word_id, 'token_pos_id:0': batch_token_pos_id,
                          'history_action_id:0': batch_history_action_id, 'deque_word_id:0': batch_deque_word_id,
@@ -132,11 +136,17 @@ class EvalHook(tf.train.SessionRunHook):
 
         up = self.head_tp / self.pred_num
         ur = self.head_tp / self.gold_num
-        uf = 2 * up * ur / (up + ur)
+        if up or ur:  # prevent divide 0
+            uf = 2 * up * ur / (up + ur)
+        else:
+            uf = 0.0
 
-        lf = self.dep_tp / self.pred_num
+        lp = self.dep_tp / self.pred_num
         lr = self.dep_tp / self.gold_num
-        lf = 2 * lf * lr / (lf + lr)
+        if lp or lr:
+            lf = 2 * lp * lr / (lp + lr)
+        else:
+            lf = 0.0
 
         summary = session.run(summary_op, {'uf_ph:0': uf,
                                            'lf_ph:0': lf})

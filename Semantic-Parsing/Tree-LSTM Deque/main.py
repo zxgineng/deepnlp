@@ -31,7 +31,7 @@ def run(mode, run_config):
             print('*' * 40)
 
             estimator.train(input_fn=train_input_fn, hooks=[logging,train_input_hook])
-            # estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
+            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
