@@ -32,6 +32,8 @@ class Model:
         graph = Graph()
         if self.mode == tf.estimator.ModeKeys.TRAIN:
             logits = graph(self.inputs, self.mode)
+            pred =  tf.argmax(logits,-1)
+            accuracy = tf.reduce_mean(tf.cast(tf.equal(pred,self.targets['transition']),tf.float32),-1,name='accuracy')
             self._build_loss(logits)
             self._build_train_op()
         else:

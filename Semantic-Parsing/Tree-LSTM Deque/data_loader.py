@@ -83,7 +83,6 @@ class ArcEagerParser:
         children_order = []
         for token in tree_tokens:
             children_order.append([t.order for t in token.children])
-        # children_order = tf.keras.preprocessing.sequence.pad_sequences(children_order, dtype='int64', padding='post')
 
         return tree_tokens, children_order, stack_order
 
@@ -114,11 +113,11 @@ class ArcEagerParser:
         transitions = [0]  # NULL
         transitions += [1]  # no-shift
         transitions += [1] if reduce_legal else [0]  # no-reduce
-        transitions += [1]  # no-pass
+        transitions += [1] if wi.token_id != 0 else [0]  # no-pass
         transitions += [1] if left_legal else [0]  # left-reduce
         transitions += [1] if left_legal else [0]  # left-pass
         transitions += [1] if right_legal else [0]  # right-shift
-        transitions += [1] if right_legal and wi.token_id!=0 else [0]  # right-pass
+        transitions += [1] if right_legal and wi.token_id != 0 else [0]  # right-pass
         transitions = transitions[:4] + transitions[4:] * (Config.model.dep_num)
 
         return transitions
@@ -482,9 +481,9 @@ def preprocess_eval(serialized):
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         word = tf.sparse_tensor_to_dense(parsed_example['word'], default_value='')
         pos = tf.sparse_tensor_to_dense(parsed_example['pos'], default_value='')
-        head = tf.decode_raw(parsed_example['head'],tf.int64)
+        head = tf.decode_raw(parsed_example['head'], tf.int64)
         head_num = parsed_example['head_num']
-        dep_id = tf.decode_raw(parsed_example['dep_id'],tf.int64)
+        dep_id = tf.decode_raw(parsed_example['dep_id'], tf.int64)
         dep_num = parsed_example['dep_num']
         length = parsed_example['length']
         return word, pos, head, head_num, dep_id, dep_num, length
@@ -567,7 +566,8 @@ def get_eval_batch(data, buffer_size=1, batch_size=64):
         dataset = dataset.map(preprocess_eval)
         dataset = dataset.repeat(1)  # 1 Epoch
         dataset = dataset.shuffle(buffer_size=buffer_size)
-        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1, -1], [-1, -1], []))
+        dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1, -1], [-1, -1], []),
+                                       ('', '', tf.cast(-1,tf.int64), tf.cast(-1,tf.int64), tf.cast(0,tf.int64)))
         iterator = dataset.make_initializable_iterator()
         next_batch = iterator.get_next('next_batch')
         word = next_batch[0]

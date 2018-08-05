@@ -8,7 +8,6 @@ from data_loader import Token, Sentence, ArcEagerParser
 
 class EvalHook(tf.train.SessionRunHook):
     def __init__(self, model_dir=None):
-        # self.total = 0
         self.head_tp = 0
         self.dep_tp = 0
         self.pred_num = 0
@@ -28,7 +27,7 @@ class EvalHook(tf.train.SessionRunHook):
             ['next_batch:0', 'next_batch:1', 'next_batch:4', 'next_batch:2', 'next_batch:3'])
 
     def after_run(self, run_context, run_values):
-        word, pos, length, head, dep_id = run_values.results
+        word, pos, length, batch_head, batch_dep_id = run_values.results
         batch_size = word.shape[0]
 
         total_sen = [Sentence([Token(n + 1, word[i][n].decode(), pos[i][n].decode(), [], []) for
@@ -44,7 +43,8 @@ class EvalHook(tf.train.SessionRunHook):
             for sen in total_sen:
                 if not sen.terminate:
                     tree_word_id, tree_pos_id, token_word_id, token_pos_id, buff_top_id, history_action_id, \
-                    deque_word_id, deque_pos_id, children_order, stack_order = self.parser.extract_from_current_state(sen)
+                    deque_word_id, deque_pos_id, children_order, stack_order = self.parser.extract_from_current_state(
+                        sen)
 
                     batch_tree_word_id.append(tree_word_id)
                     batch_tree_pos_id.append(tree_pos_id)
@@ -67,15 +67,15 @@ class EvalHook(tf.train.SessionRunHook):
             batch_tree_pos_id = tf.keras.preprocessing.sequence.pad_sequences(batch_tree_pos_id,
                                                                               dtype='int64', padding='post')
             batch_token_word_id = tf.keras.preprocessing.sequence.pad_sequences(batch_token_word_id,
-                                                                               dtype='int64', padding='post')
+                                                                                dtype='int64', padding='post')
             batch_token_pos_id = tf.keras.preprocessing.sequence.pad_sequences(batch_token_pos_id,
-                                                                              dtype='int64', padding='post')
+                                                                               dtype='int64', padding='post')
             batch_history_action_id = tf.keras.preprocessing.sequence.pad_sequences(batch_history_action_id,
                                                                                     dtype='int64', padding='post')
             batch_deque_word_id = tf.keras.preprocessing.sequence.pad_sequences(batch_deque_word_id,
-                                                                                  dtype='int64', padding='post')
+                                                                                dtype='int64', padding='post')
             batch_deque_pos_id = tf.keras.preprocessing.sequence.pad_sequences(batch_deque_pos_id,
-                                                                                 dtype='int64', padding='post')
+                                                                               dtype='int64', padding='post')
             batch_stack_order = tf.keras.preprocessing.sequence.pad_sequences(batch_stack_order,
                                                                               dtype='int64', padding='post')
 
@@ -90,9 +90,9 @@ class EvalHook(tf.train.SessionRunHook):
                          'token_word_id:0': batch_token_word_id, 'token_pos_id:0': batch_token_pos_id,
                          'history_action_id:0': batch_history_action_id, 'deque_word_id:0': batch_deque_word_id,
                          'deque_pos_id:0': batch_deque_pos_id, 'buff_top_id:0': batch_buff_top_id,
-                         'deque_length:0': batch_deque_length, 'children_order:0':batch_children_order,
-                         'stack_order:0': batch_stack_order,'stack_length:0': batch_stack_length,
-                         'token_length:0': batch_token_length,'history_action_length:0': batch_history_action_length}
+                         'deque_length:0': batch_deque_length, 'children_order:0': batch_children_order,
+                         'stack_order:0': batch_stack_order, 'stack_length:0': batch_stack_length,
+                         'token_length:0': batch_token_length, 'history_action_length:0': batch_history_action_length}
 
             prob = run_context.session.run("Softmax:0", feed_dict)
 
@@ -108,10 +108,10 @@ class EvalHook(tf.train.SessionRunHook):
                     if self.parser.terminal(sen):
                         sen.terminate = True
             if [sen.terminate for sen in total_sen] == [True] * batch_size:
-                exit()
                 for i, sen in enumerate(total_sen):
-                    for gold_head,gold_dep,pred in zip(head[i,:length[i]],dep_id[i,:length[i]],sen.tokens):
-                        for j,head in enumerate(gold_head):
+                    for gold_head, gold_dep, pred in zip(batch_head[i, :length[i]], batch_dep_id[i, :length[i]],
+                                                         sen.tokens):
+                        for j, head in enumerate(gold_head):
                             if head == -1:
                                 continue
                             else:
@@ -123,7 +123,6 @@ class EvalHook(tf.train.SessionRunHook):
                                     self.pred_num += 1
                                 self.gold_num += 1
                         self.pred_num += len(pred.pred_head_id)
-
                 break
 
     def end(self, session):
@@ -132,10 +131,10 @@ class EvalHook(tf.train.SessionRunHook):
         summary_op = tf.get_default_graph().get_collection('f_score')
 
         up = self.head_tp / self.pred_num
-        ur = self.head_tp/ self.gold_num
+        ur = self.head_tp / self.gold_num
         uf = 2 * up * ur / (up + ur)
 
-        lf = self.dep_tp /self.pred_num
+        lf = self.dep_tp / self.pred_num
         lr = self.dep_tp / self.gold_num
         lf = 2 * lf * lr / (lf + lr)
 

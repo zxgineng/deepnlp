@@ -23,14 +23,15 @@ def run(mode, run_config):
 
         val_input_fn, val_input_hook = data_loader.get_eval_batch(val_data, batch_size=512)
 
+        logging = tf.train.LoggingTensorHook({'accuracy':'accuracy:0'},100)
+
         while True:
             print('*' * 40)
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
-            exit()
-            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
+            estimator.train(input_fn=train_input_fn, hooks=[logging,train_input_hook])
+            # estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
