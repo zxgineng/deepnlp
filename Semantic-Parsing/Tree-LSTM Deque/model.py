@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import EvalHook
+from hooks import EvalHook, PredHook
 
 
 class Model:
@@ -14,7 +14,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions,self.evaluation_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.evaluation_hooks = None, None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -26,14 +26,16 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             predictions=self.predictions,
-            evaluation_hooks = self.evaluation_hooks)
+            evaluation_hooks=self.evaluation_hooks,
+            prediction_hooks=self.prediction_hooks)
 
     def build_graph(self):
         graph = Graph()
         if self.mode == tf.estimator.ModeKeys.TRAIN:
             logits = graph(self.inputs, self.mode)
-            pred =  tf.argmax(logits,-1)
-            accuracy = tf.reduce_mean(tf.cast(tf.equal(pred,self.targets['transition']),tf.float32),-1,name='accuracy')
+            pred = tf.argmax(logits, -1)
+            accuracy = tf.reduce_mean(tf.cast(tf.equal(pred, self.targets['transition']), tf.float32), -1,
+                                      name='accuracy')
             self._build_loss(logits)
             self._build_train_op()
         else:
@@ -46,7 +48,7 @@ class Model:
                       'deque_word_id': tf.placeholder(tf.int64, [None, None], name='deque_word_id'),
                       'deque_pos_id': tf.placeholder(tf.int64, [None, None], name='deque_pos_id'),
                       'deque_length': tf.placeholder(tf.int64, [None], name='deque_length'),
-                      'children_order': tf.placeholder(tf.int64, [None,None,None], name='children_order'),
+                      'children_order': tf.placeholder(tf.int64, [None, None, None], name='children_order'),
                       'stack_order': tf.placeholder(tf.int64, [None, None], name='stack_order'),
                       'stack_length': tf.placeholder(tf.int64, [None], name='stack_length'),
                       'token_length': tf.placeholder(tf.int64, [None], name='token_length'),
@@ -61,8 +63,9 @@ class Model:
             tf.summary.scalar('L-F-score', lf, ['f_score'], 'score')
 
             self.evaluation_hooks = [EvalHook()]
-            prediction = tf.argmax(logits, -1)
-            self.predictions = prediction
+            self.prediction_hooks = [PredHook()]
+            self.predictions = {'pred_head': tf.placeholder(tf.int64, [None, None, None], name='pred_head'),
+                                'pred_dep': tf.placeholder(tf.int64, [None, None, None], name='pred_dep')}
 
     def _build_loss(self, logits):
         loss = tf.losses.sparse_softmax_cross_entropy(labels=self.targets['transition'], logits=logits)

@@ -363,9 +363,17 @@ def id2word(id, dict):
     return [id2word[i] for i in id]
 
 
+def id2pos(id, dict):
+    id2pos = {i: t for i, t in enumerate(dict)}
+    return [id2pos[i] for i in id]
+
+
 def id2dep(id, dict):
     id2dep = {i: t for i, t in enumerate(dict)}
-    return [id2dep[i] for i in id]
+    if isinstance(id,list):
+        return [id2dep[i] for i in id]
+    else:
+        return id2dep[id]
 
 
 def convert_to_train_example(tree_word_id, tree_pos_id, token_word_id, token_pos_id, buff_top_id, history_action_id,
@@ -567,7 +575,7 @@ def get_eval_batch(data, buffer_size=1, batch_size=64):
         dataset = dataset.repeat(1)  # 1 Epoch
         dataset = dataset.shuffle(buffer_size=buffer_size)
         dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1, -1], [-1, -1], []),
-                                       ('', '', tf.cast(-1,tf.int64), tf.cast(-1,tf.int64), tf.cast(0,tf.int64)))
+                                       ('', '', tf.cast(-1, tf.int64), tf.cast(-1, tf.int64), tf.cast(0, tf.int64)))
         iterator = dataset.make_initializable_iterator()
         next_batch = iterator.get_next('next_batch')
         word = next_batch[0]
@@ -670,24 +678,3 @@ if __name__ == '__main__':
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
     create_tfrecord()
-
-    # vocab = load_vocab()
-    # tfr = get_tfrecord('test')
-    # dataset = tf.data.TFRecordDataset(tfr)
-    # dataset = dataset.map(preprocess_eval)
-    # dataset = dataset.padded_batch(8, ([-1], [-1], [-1, -1], [-1, -1], []))
-    # iterator = dataset.make_one_shot_iterator()
-    # next_batch = iterator.get_next('next_batch')
-    # sess = tf.Session()
-    # r = sess.run(next_batch)
-    # print(r[0])
-    # print('*'*40)
-    # print(r[2])
-    # print('*' * 40)
-    # print(r[4])
-    # print('*'*40)
-    # print(r[8])
-    # print('*' * 40)
-    # print(r[9])
-    # print('*' * 40)
-    # print(r[11])

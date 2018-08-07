@@ -23,7 +23,7 @@ model:
   history_action_embedding_size: 50
 
 train:
-  batch_size: 128
+  batch_size: 256
   initial_lr: 0.1
   lr_decay: 0.1
   reg_scale: 0.000001

@@ -29,12 +29,14 @@ class Graph(tf.keras.Model):
                       for _ in range(2)]
         self.stack_lstm = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
 
-        self.fw_lstm_cell = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer())
-        self.bw_lstm_cell = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer())
-        # self.fw_lstm_cell1 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
-        #                                              name='fw_cell1')
-        # self.bw_lstm_cell1 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
-        #                                              name='bw_cell1')
+        self.fw_lstm_cell0 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
+                                                     name='fw_cell0')
+        self.bw_lstm_cell0 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
+                                                     name='bw_cell0')
+        self.fw_lstm_cell1 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
+                                                     name='fw_cell1')
+        self.bw_lstm_cell1 = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer(),
+                                                     name='bw_cell1')
 
         lstm_cells = [tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer())
                       for _ in range(2)]
@@ -44,7 +46,7 @@ class Graph(tf.keras.Model):
                       for _ in range(2)]
         self.deque_lstm = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
 
-        self.final_dense = tf.keras.layers.Dense(4 + 4 * Config.model.dep_num, name='softmax_fc')
+        self.final_dense = tf.keras.layers.Dense(4 + 4 * Config.model.dep_num, tf.nn.relu,name='softmax_fc')
 
     def _embedding(self, tree_word_id, tree_pos_id, token_word_id, token_pos_id, history_action_id, deque_word_id,
                    deque_pos_id):
@@ -76,7 +78,8 @@ class Graph(tf.keras.Model):
         batch_size = tf.shape(children_order, out_type=tf.int64)[0]
         children_num = tf.shape(children_order)[1]
 
-        h_tensors = h_tensors.write(0, tf.zeros(tf.stack([batch_size, Config.model.lstm_unit])))  # idx 0 represents no children states
+        h_tensors = h_tensors.write(0, tf.zeros(
+            tf.stack([batch_size, Config.model.lstm_unit])))  # idx 0 represents no children states
         c_tensors = c_tensors.write(0, tf.zeros(tf.stack([batch_size, Config.model.lstm_unit])))
 
         tree_lstm_one_step = lambda inputs, c, h: self.tree_lstm_cell(inputs, tf.nn.rnn_cell.LSTMStateTuple(c, h))
@@ -144,11 +147,11 @@ class Graph(tf.keras.Model):
             stack_lstm_outputs = states[1].h
 
         with tf.variable_scope('buff_lstm'):
-            outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_lstm_cell, self.bw_lstm_cell, token_embedded,
+            outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_lstm_cell0, self.bw_lstm_cell0, token_embedded,
                                                               token_length, dtype=tf.float32)
-            # outputs = tf.concat(outputs, -1)
-            # outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_lstm_cell1, self.bw_lstm_cell1, outputs,
-            #                                                   token_length, dtype=tf.float32)
+            outputs = tf.concat(outputs, -1)
+            outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_lstm_cell1, self.bw_lstm_cell1, outputs,
+                                                              token_length, dtype=tf.float32)
             fw_outputs, bw_outputs = outputs
             batch_size = tf.shape(stack_length, out_type=tf.int64)[0]
             fw_top = tf.gather_nd(fw_outputs, tf.stack([tf.range(batch_size, dtype=tf.int64), buff_top_id], -1))
