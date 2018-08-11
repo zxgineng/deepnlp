@@ -599,7 +599,7 @@ def create_tfrecord():
     train_data = build_and_read_train(train_files)
     test_files = [os.path.join(Config.data.dataset_path, file) for file in Config.data.test_data]
     test_data = read_test(test_files)
-    # build_wordvec_pkl()
+    build_wordvec_pkl()
     pos_dict = load_pos()
     dep_dict = load_dep()
     parser = ArcEagerParser()

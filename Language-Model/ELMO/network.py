@@ -31,7 +31,7 @@ class Graph:
             net = tf.reshape(inputs, [-1, Config.model.char_image_size, Config.model.char_image_size, 1])
             net = slim.conv2d(net, 16, 3)
             net = slim.conv2d(net, 16, 3)
-            net = slim.max_pool2d(net, 3, 2, 'SAME')
+            net = slim.max_pool2d(net, 2, 2, 'SAME')
             net = slim.conv2d(net, 32, 3)
             net = slim.conv2d(net, 32, 3)
             outputs = slim.max_pool2d(net, 3, 2, 'SAME')

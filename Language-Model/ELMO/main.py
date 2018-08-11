@@ -19,9 +19,9 @@ def run(mode, run_config):
                                               'step': 'global_step:0'}, every_n_iter=100)
 
     if mode == 'train':
-        for_train_data = data_loader.get_tfrecord('for-tfrecord', 'train')
+        for_train_data = data_loader.get_tfrecord('for-tfrecord', 'test')
         for_val_data = data_loader.get_tfrecord('for-tfrecord', 'test')
-        back_train_data = data_loader.get_tfrecord('back-tfrecord', 'train')
+        back_train_data = data_loader.get_tfrecord('back-tfrecord', 'test')
         back_val_data = data_loader.get_tfrecord('back-tfrecord', 'test')
 
         train_input_fn, train_input_hook = data_loader.get_both_batch(for_train_data, back_train_data, buffer_size=5000,
