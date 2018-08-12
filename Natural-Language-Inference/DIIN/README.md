@@ -113,7 +113,7 @@ Dataset: [biendata](https://biendata.com/competition/CCKS2018_3/)
 | :----------:| :----------: |
 |![images](images/train-loss.png)|![images](images/eval-loss.png)|
 
-|eval score|
+|eval accuracy|
 | :----------:|
 |**best accuracy**: 0.8410|
 |![images](images/accuracy.png)|
