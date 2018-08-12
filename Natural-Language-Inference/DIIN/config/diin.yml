@@ -27,15 +27,15 @@ model:
   pos_embedding_size: 50
 
 train:
-  batch_size: 1
+  batch_size: 20
   switch_optimizer: 0
   initial_lr: 0.5
-  sgd_lr: 0.004
+  sgd_lr: 0.0003
   l2_full_ratio: 0.0001
   constraint_scale: 0.001
-  dropout_decay: 0.95
-  epoch: 0
-  max_epoch: 15
+  dropout_decay: 0.92
+  epoch: 9
+  max_epoch: 20
 
   model_dir: '~/big_data/logs/nlp/natural-language-inference/diin/'
   save_checkpoints_steps: 2000

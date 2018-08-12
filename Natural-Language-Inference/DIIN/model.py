@@ -3,7 +3,6 @@ from tensorflow.contrib import slim
 
 from utils import Config
 from network import Graph
-from hooks import SwitchOptimizerHook
 
 
 class Model:
@@ -26,8 +25,7 @@ class Model:
             loss=self.loss,
             train_op=self.train_op,
             eval_metric_ops=self.metrics,
-            predictions=self.predictions,
-            evaluation_hooks=self.evaluation_hooks)
+            predictions=self.predictions)
 
     def build_graph(self):
         graph = Graph()
@@ -38,13 +36,13 @@ class Model:
         if self.mode != tf.estimator.ModeKeys.PREDICT:
             self._build_loss(logits)
             self._build_train_op()
-            self.evaluation_hooks = [SwitchOptimizerHook()]
+            self._build_metric()
 
     def _build_loss(self, logits):
 
         xentropy_loss = tf.losses.sparse_softmax_cross_entropy(labels=self.targets, logits=logits)
 
-        l2_ratio = Config.train.l2_full_ratio * tf.nn.sigmoid(Config.train.epoch / 2.5 - 1)
+        l2_ratio = Config.train.l2_full_ratio * tf.nn.sigmoid(Config.train.epoch / 2.0 - 1)
         l2_loss = l2_ratio * tf.reduce_sum([tf.nn.l2_loss(v) for v in tf.trainable_variables()
                                             if 'word_embedding' not in v.name and 'pos_embedding' not in v.name])
 

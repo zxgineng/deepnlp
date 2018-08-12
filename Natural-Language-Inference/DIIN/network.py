@@ -64,7 +64,8 @@ class Dropout_Dense(tf.keras.layers.Dense):
             kernel_constraint=kernel_constraint,
             bias_constraint=bias_constraint,
             **kwargs)
-        self.dropout = tf.keras.layers.Dropout(1 - tf.pow(Config.train.dropout_decay, Config.train.epoch))
+        drop_rate = tf.minimum(1 - tf.pow(Config.train.dropout_decay, Config.train.epoch),0.5)
+        self.dropout = tf.keras.layers.Dropout(drop_rate)
 
     def call(self, inputs, training):
         inputs = self.dropout(inputs, training=training)

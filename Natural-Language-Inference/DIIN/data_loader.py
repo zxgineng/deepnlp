@@ -325,7 +325,7 @@ def create_tfrecord():
     train_data = build_and_read_train(train_file)
     test_file = os.path.join(Config.data.dataset_path, Config.data.test_data)
     test_data = read_test(test_file)
-    # build_wordvec_pkl()
+    build_wordvec_pkl()
     vocab = load_vocab()
     pos_dict = load_pos()
 

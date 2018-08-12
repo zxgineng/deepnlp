@@ -14,10 +14,6 @@ def run(mode, run_config):
         model_dir=Config.train.model_dir,
         config=run_config)
 
-    logging = tf.train.LoggingTensorHook({'a': 'a:0',
-                                          # 'b': 'graph/b:0'
-                                          }, every_n_iter=1)
-
     if mode == 'train':
         train_data = data_loader.get_tfrecord('train')
         val_data = data_loader.get_tfrecord('test')
@@ -25,27 +21,40 @@ def run(mode, run_config):
                                                                          batch_size=Config.train.batch_size,
                                                                          scope="val")
 
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=20, scope="val", shuffle=False)
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=20, scope="val",
+                                                                     shuffle=False)
 
-
+        min_loss = 100
+        min_loss_epoch = 0
 
         while True:
             print('*' * 40)
             print("epoch", Config.train.epoch + 1, 'start')
             print('*' * 40)
 
-            # estimator.train(input_fn=train_input_fn, hooks=[train_input_hook,logging])
-            estimator.train(input_fn=val_input_fn, hooks=[val_input_hook,logging])
-            estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
+            estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
+            eval_results = estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
             Config.train.epoch += 1
             if Config.train.epoch == Config.train.max_epoch:
                 break
 
+            if eval_results['loss'] < min_loss:
+                min_loss = eval_results['loss']
+                min_loss_epoch = Config.train.epoch
+            print('min loss:', min_loss, '  min_loss_epoch:', min_loss_epoch)
+            if Config.train.switch_optimizer == 1 and (Config.train.epoch - min_loss_epoch) >= 3:
+                break
+            if Config.train.switch_optimizer == 0 and (Config.train.epoch - min_loss_epoch) >= 3:
+                print('switch optimizer to SGD')
+                Config.train.switch_optimizer = 1
+
+
     elif mode == 'eval':
         val_data = data_loader.get_tfrecord('test')
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=1, scope="val", shuffle=False)
-        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook,logging])
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=20, scope="val",
+                                                                     shuffle=False)
+        estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
 
 def main(mode):
@@ -74,10 +83,10 @@ if __name__ == '__main__':
     Config.train.model_dir = os.path.expanduser(Config.train.model_dir)
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
-    # print(Config)
-    # if Config.get("description", None):
-    #     print("Config Description")
-    #     for key, value in Config.description.items():
-    #         print(f" - {key}: {value}")
+    print(Config)
+    if Config.get("description", None):
+        print("Config Description")
+        for key, value in Config.description.items():
+            print(f" - {key}: {value}")
 
     main(args.mode)
