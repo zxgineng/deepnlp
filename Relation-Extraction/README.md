@@ -2,6 +2,9 @@
 
 **related papars:**
 
+[Reinforcement Learning for Relation Classification from Noisy Data](https://www.microsoft.com/en-us/research/wp-content/uploads/2017/11/AAAI2018Denoising.pdf) (2018. 2)  
+[A Soft-label Method for Noise-tolerant Distantly Supervised Relation Extraction](http://aclweb.org/anthology/D17-1189) (2017. 9)  
+[Adversarial Training for Relation Extraction](https://www.aclweb.org/anthology/D17-1187) (2017. 9)  
 [Learning with Noise: Enhance Distantly Supervised Relation Extraction with Dynamic Transition Matrix](https://arxiv.org/pdf/1705.03995.pdf) (2017. 5)  
 [Attention-Based Bidirectional Long Short-Term Memory Networks for Relation Classification](http://anthology.aclweb.org/P16-2034) (2016. 8)  
 [Neural Relation Extraction with Selective Attention over Instances](http://aclweb.org/anthology/P16-1200) (2016. 8)  
