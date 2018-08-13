@@ -39,38 +39,39 @@ class Model:
             self._build_metric()
 
     def _build_loss(self, sen_matrix):
-        #  rearange sen_matrix according to labels
+        labels = self.targets['label']
+        entity_pair_id = self.targets['entity_pair_id']
         #  sort label and sen_matrix
-        sorted_idx = tf.nn.top_k(self.targets, tf.shape(self.targets)[0]).indices
-        sorted_label = tf.gather(self.targets, sorted_idx)
-        sorted_sen = tf.gather(sen_matrix, sorted_idx)
-        #  count num of each class
-        class_count = tf.bincount(tf.cast(self.targets, tf.int32), dtype=tf.int64)[::-1]
-        max_count = tf.reduce_max(class_count)
+        entity_pair_id, sorted_idx = tf.nn.top_k(entity_pair_id, tf.shape(entity_pair_id)[0])
+        labes = tf.gather(labels, sorted_idx)
+        sen_matrix = tf.gather(sen_matrix, sorted_idx)
+        #  count num of each pair
+        pair_count = tf.bincount(tf.cast(entity_pair_id, tf.int32), dtype=tf.int64)[::-1]
+        max_pair_count = tf.reduce_max(pair_count)
         #  non-zero
-        non_zero_class_count = tf.boolean_mask(class_count, tf.cast(class_count, tf.bool))
+        pair_count = tf.boolean_mask(pair_count, tf.cast(pair_count, tf.bool))
+        labels = tf.gather(labes, tf.cumsum(pair_count) - 1)
         # build index matrix
-        y_idx, x_idx = tf.meshgrid(tf.range(max_count), tf.range(tf.shape(non_zero_class_count, out_type=tf.int64)[0]))
+        y_idx, x_idx = tf.meshgrid(tf.range(max_pair_count),
+                                   tf.range(tf.shape(pair_count, out_type=tf.int64)[0]))
         grid = tf.stack([x_idx, y_idx], -1)
-        mask = tf.sequence_mask(non_zero_class_count)
+        mask = tf.sequence_mask(pair_count)
         sparse_idx = tf.boolean_mask(grid, mask)  # valid idx
         # use sparse tensor to reshape sen_matrix
-        shape = tf.stack([tf.shape(non_zero_class_count, out_type=tf.int64)[0], max_count])
+        shape = tf.stack([tf.shape(pair_count, out_type=tf.int64)[0], max_pair_count])
         idx_matrix = tf.sparse_tensor_to_dense(
-            tf.SparseTensor(sparse_idx, tf.range(tf.shape(self.targets, out_type=tf.int64)[0]), shape))
-        labels = tf.unique(sorted_label).y
-        # new sen_matrix [non_zero_class_num, max_count, dim]
-        sen_matrix = tf.gather_nd(sorted_sen, tf.expand_dims(idx_matrix, -1))
+            tf.SparseTensor(sparse_idx, tf.range(tf.shape(entity_pair_id, out_type=tf.int64)[0]), shape))
+        # new sen_matrix [pair_num, max_pair_count, dim]
+        sen_matrix = tf.gather_nd(sen_matrix, tf.expand_dims(idx_matrix, -1))
         # cal sentence-attention
         relation_repre = tf.keras.layers.Embedding(12, tf.shape(sen_matrix, out_type=tf.int64)[-1])(labels)
-        r = tf.expand_dims(relation_repre, -1)  # [non_zero_class_num,dim,1]
-        score = tf.squeeze(tf.matmul(sen_matrix, r), -1)  # [non_zero_class_num,max_count]
+        r = tf.expand_dims(relation_repre, -1)  # [pair_num,dim,1]
+        score = tf.squeeze(tf.matmul(sen_matrix, r), -1)  # [pair_num,max_pair_count]
         log_score = tf.exp(score - tf.reduce_max(score, -1, True)) * tf.cast(mask, tf.float32)
         softmax = log_score / tf.reduce_sum(log_score, -1, True)
-        alpha = tf.expand_dims(softmax, -1)  # [non_zero_class_num,max_count,1]
-        sentence_att = tf.reduce_sum(alpha * sen_matrix, 1)  # [non_zero_class_num, dim]
+        alpha = tf.expand_dims(softmax, -1)  # [pair_num,max_pair_count,1]
+        sentence_att = tf.reduce_sum(alpha * sen_matrix, 1)  # [pair_num, dim]
         logits = tf.keras.layers.Dense(Config.model.class_num)(sentence_att)
-
         xentropy = tf.losses.sparse_softmax_cross_entropy(labels=labels,logits=logits)
 
 

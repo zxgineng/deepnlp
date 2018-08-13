@@ -12,10 +12,12 @@ data:
 
 model:
   class_num: 12
-  lstm_unit: 100
-  fc_unit: 13
+  tag_num:
+
   dropout_keep_prob: 0.5
-  embedding_size: 100
+  word_embedding_size: 100
+  tag_embedding_size: 50
+  position_embedding_size: 5
 
 train:
   batch_size: 20
