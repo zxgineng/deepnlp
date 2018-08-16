@@ -1,6 +1,6 @@
 data:
   dataset_path: '~/big_data/dataset/nlp/relation-extraction/'
-  processed_path: '~/big_data/processed-data/nlp/relation-extraction/pcnn-att/'
+  processed_path: '~/big_data/processed-data/nlp/relation-extraction/bigru-adv-soft_label/'
 
   train_data: 'train.txt'
 
@@ -14,17 +14,20 @@ data:
 model:
   class_num: 11
   tag_num: 28
-  cnn_filters: 230
+  gru_units: 200
   dropout_keep_prob: 0.5
+  epsilon: 0.5
   word_embedding_size: 300
   tag_embedding_size: 50
-  position_embedding_size: 5
+  entity_indicator_size: 3
 
 train:
-  piece_pooling: 1
-  batch_size: 160
-  initial_lr: 0.01
+  adversarial_training: 1
+  soft_label: 1
+  soft_label_start: 3000
+  batch_size: 50
+  initial_lr: 0.001
   max_steps: 12000
 
-  model_dir: '~/big_data/logs/nlp/relation-extraction/pcnn-att/'
+  model_dir: '~/big_data/logs/nlp/relation-extraction/bigru-adv-soft_label/'
   save_checkpoints_steps: 2000

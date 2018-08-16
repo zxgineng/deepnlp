@@ -18,13 +18,6 @@ def _int64_feature(value):
         return tf.train.Feature(int64_list=tf.train.Int64List(value=list(value)))
 
 
-def pos_encode(pos_list):
-    outputs = []
-    for pos in pos_list:
-        outputs.append(max(1, min(100 + pos, 200)))
-    return outputs
-
-
 def build_and_read_train(file):
     vocab_file = os.path.join(Config.data.processed_path, Config.data.vocab_file)
     rel_file = os.path.join(Config.data.processed_path, Config.data.rel_file)
@@ -125,17 +118,15 @@ def word2id(words, vocab):
     return word_id
 
 
-def convert_to_example(entity_pair_id, label, word_id, pos_1, pos_2, en1_pos, en2_pos):
+def convert_to_example(entity_pair_id, label, word_id, en_indicator):
     """convert one sample to example"""
 
     data = {
         'entity_pair_id': _int64_feature(entity_pair_id),
         'label': _int64_feature(label),
         'word_id': _int64_feature(word_id),
-        'pos_1': _int64_feature(pos_1),
-        'pos_2': _int64_feature(pos_2),
-        'en1_pos': _int64_feature(en1_pos),
-        'en2_pos': _int64_feature(en2_pos)
+        'en_indicator': _int64_feature(en_indicator),
+        'length': _int64_feature(len(word_id))
     }
     features = tf.train.Features(feature=data)
     example = tf.train.Example(features=features)
@@ -148,21 +139,17 @@ def preprocess(serialized):
             'entity_pair_id': tf.FixedLenFeature([], tf.int64),
             'label': tf.FixedLenFeature([], tf.int64),
             'word_id': tf.VarLenFeature(tf.int64),
-            'pos_1': tf.VarLenFeature(tf.int64),
-            'pos_2': tf.VarLenFeature(tf.int64),
-            'en1_pos': tf.FixedLenFeature([], tf.int64),
-            'en2_pos': tf.FixedLenFeature([], tf.int64)
+            'en_indicator': tf.VarLenFeature(tf.int64),
+            'length': tf.FixedLenFeature([], tf.int64)
         }
         parsed_example = tf.parse_single_example(serialized=serialized, features=features)
         entity_pair_id = parsed_example['entity_pair_id']
         label = parsed_example['label']
         word_id = tf.sparse_tensor_to_dense(parsed_example['word_id'])
-        pos_1 = tf.sparse_tensor_to_dense(parsed_example['pos_1'])
-        pos_2 = tf.sparse_tensor_to_dense(parsed_example['pos_2'])
-        en1_pos = parsed_example['en1_pos']
-        en2_pos = parsed_example['en2_pos']
+        en_indicator = tf.sparse_tensor_to_dense(parsed_example['en_indicator'])
+        length = parsed_example['length']
 
-        return entity_pair_id, label, word_id, pos_1, pos_2, en1_pos, en2_pos
+        return entity_pair_id, label, word_id, en_indicator, length
 
     return parse_tfrecord(serialized)
 
@@ -188,25 +175,23 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train", shuffle
         else:
             dataset = dataset.repeat(1)  # 1 Epoch
         dataset = dataset.shuffle(buffer_size=buffer_size)
-        dataset = dataset.padded_batch(batch_size, ([], [], [-1], [-1], [-1], [], []))
+        dataset = dataset.padded_batch(batch_size, ([], [], [-1], [-1], []))
 
         iterator = dataset.make_initializable_iterator()
         next_batch = iterator.get_next('next_batch')
         entity_pair_id = next_batch[0]
         label = next_batch[1]
         word_id = next_batch[2]
-        pos_1 = next_batch[3]
-        pos_2 = next_batch[4]
-        en1_pos = next_batch[5]
-        en2_pos = next_batch[6]
+        en_indicator = next_batch[3]
+        length = next_batch[4]
 
         iterator_initializer_hook.iterator_initializer_func = \
             lambda sess: sess.run(
                 iterator.initializer,
                 feed_dict={input_placeholder: np.random.permutation(data) if shuffle else data})
 
-        return {'word_id': word_id, 'pos_1': pos_1, 'pos_2': pos_2,
-                'en1_pos': en1_pos, 'en2_pos': en2_pos}, {'entity_pair_id': entity_pair_id, 'label': label}
+        return {'word_id': word_id, 'en_indicator': en_indicator, 'length': length}, {'entity_pair_id': entity_pair_id,
+                                                                                      'label': label}
 
     return inputs, iterator_initializer_hook
 
@@ -243,31 +228,13 @@ def create_tfrecord():
                         i += 1
                         continue
                     entity_pair_id = entity_pair_dict[en1 + ' ' + en2]
-                    en1_start = sen.index(en1)
-                    en1_end = en1_start + len(en1) -1
-                    en2_start = sen.index(en2)
-                    en2_end = en2_start + len(en2) - 1
+                    en_indicator = [0] * len(sen)
+                    en_indicator[sen.index(en1):sen.index(en1) + len(en1)] = [1] * len(en1)
+                    en_indicator[sen.index(en2):sen.index(en2) + len(en2)] = [-1] * len(en2)
                     label = rel_dict[r]
                     word_id = word2id(list(sen), vocab)
-                    pos_1 = []
-                    pos_2 = []
-                    for n in range(len(sen)):
-                        if n < en1_start:
-                            pos_1.append(n - en1_start)
-                        elif en1_start <= n <= en1_end:
-                            pos_1.append(0)
-                        else:
-                            pos_1.append(n - en1_end)
 
-                        if n < en2_start:
-                            pos_2.append(n - en2_start)
-                        elif en2_start <= n <= en2_end:
-                            pos_2.append(0)
-                        else:
-                            pos_2.append(n - en2_end)
-
-                    example = convert_to_example(entity_pair_id, label, word_id, pos_encode(pos_1), pos_encode(pos_2),
-                                                 en1_end, en2_end)
+                    example = convert_to_example(entity_pair_id, label, word_id, en_indicator)
                     serialized = example.SerializeToString()
                     tfrecord_writer.write(serialized)
                     i += 1
@@ -281,7 +248,7 @@ def create_tfrecord():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', type=str, default='config/pcnn-att.yml',
+    parser.add_argument('--config', type=str, default='config/bigru-adv-soft_label.yml',
                         help='config file name')
     args = parser.parse_args()
 

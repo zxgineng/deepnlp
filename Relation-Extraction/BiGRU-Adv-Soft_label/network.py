@@ -9,29 +9,37 @@ class Graph(tf.keras.Model):
         super(Graph, self).__init__(**kwargs)
 
         self.embedding_layer = Embedding_Layer(name='embedding_layer')
-        self.cnn_layer = CNN_Layer(name='cnn_layer')
-        self.pool_layer = Pool_Layer(name='pool_layer')
+        self.encoding_layer = Encoding_Layer(name='encoding_layer')
         self.selective_attention = Selective_Attention(name='selective_attention')
         self.softmax_dense = tf.keras.layers.Dense(Config.model.class_num)
 
     def call(self, inputs, targets, mode):
         if mode == tf.estimator.ModeKeys.TRAIN:
-            is_training = True
+            training = True
         else:
-            is_training = False
+            training = False
 
         word_id = inputs['word_id']
-        pos_1 = inputs['pos_1']
-        pos_2 = inputs['pos_2']
-        en1_pos = inputs['en1_pos']
-        en2_pos = inputs['en2_pos']
-        embedded = self.embedding_layer(word_id, pos_1, pos_2)
-        net = self.cnn_layer(embedded)
-        sen_matrix = self.pool_layer(net, en1_pos, en2_pos)  # [B,3*dim]
+        en_indicator = inputs['en_indicator']
+        length = inputs['length']
 
-        if is_training:
+        embedded = self.embedding_layer(word_id, en_indicator, training)
+        sen_matrix = self.encoding_layer(embedded, length)  # [B,2*dim]
+
+        if training:
             sen_matrix, labels = self.selective_attention(sen_matrix, targets)
             sen_matrix = tf.nn.dropout(sen_matrix, Config.model.dropout_keep_prob)
+
+            # adversarial training
+            if Config.train.adversarial_training:
+                logits = self.softmax_dense(sen_matrix)
+                loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+                g = tf.gradients(loss, self.embedding_layer.origin_embedded)
+                e = Config.model.epsilon * tf.stop_gradient(tf.nn.l2_normalize(g))[0]
+                embedded = tf.pad(e, [[0, 0], [0, 0], [0, Config.model.entity_indicator_size]]) + embedded
+                sen_matrix = self.encoding_layer(embedded, length)
+                sen_matrix, labels = self.selective_attention(sen_matrix, targets)
+                sen_matrix = tf.nn.dropout(sen_matrix, Config.model.dropout_keep_prob)
         else:
             labels = None
 
@@ -50,60 +58,31 @@ class Embedding_Layer(tf.keras.Model):
                                                         name='word_embedding')
         self.tag_embedding = tf.keras.layers.Embedding(Config.model.tag_num, Config.model.tag_embedding_size,
                                                        name='tag_embedding')
-        self.pos_embedding = tf.keras.layers.Embedding(201, Config.model.position_embedding_size,
-                                                       name='position_embedding')
 
-    def call(self, word_id, pos_1, pos_2):
+    def call(self, word_id, en_indicator, training):
         word_embedded = self.word_embedding(word_id)
-        pos_1_embedded = self.pos_embedding(pos_1)
-        pos_2_embedded = self.pos_embedding(pos_2)
-        outputs = tf.concat([word_embedded, pos_1_embedded, pos_2_embedded], -1)
+        if training:
+            word_embedded = tf.nn.dropout(word_embedded, Config.model.dropout_keep_prob)
+        en_indicator = tf.cast(tf.tile(tf.expand_dims(en_indicator, -1), [1, 1, Config.model.entity_indicator_size]),
+                               tf.float32)
+        outputs = tf.concat([word_embedded, en_indicator], -1)
+        self.origin_embedded = word_embedded
         return outputs
 
 
-class CNN_Layer(tf.keras.Model):
+class Encoding_Layer(tf.keras.Model):
     def __init__(self, **kwargs):
-        super(CNN_Layer, self).__init__(**kwargs)
+        super(Encoding_Layer, self).__init__(**kwargs)
+        self.fw_gru = tf.nn.rnn_cell.GRUCell(Config.model.gru_units, kernel_initializer=tf.orthogonal_initializer())
+        self.bw_gru = tf.nn.rnn_cell.GRUCell(Config.model.gru_units, kernel_initializer=tf.orthogonal_initializer())
+        self.softmax_dense = tf.keras.layers.Dense(1)
 
-        self.conv1d = tf.keras.layers.Conv1D(Config.model.cnn_filters, 3, 1, 'SAME', activation=tf.nn.relu)
-
-    def call(self, inputs):
-        net = self.conv1d(inputs)
-        return net
-
-
-class Pool_Layer(tf.keras.Model):
-    """piece pooling"""
-
-    def __init__(self, **kwargs):
-        super(Pool_Layer, self).__init__(**kwargs)
-
-    def call(self, inputs, en1_pos, en2_pos):
-        if Config.train.piece_pooling:
-            seq_length = tf.shape(inputs)[1]
-            temp = tf.zeros_like(inputs, tf.int64)
-            mask1 = tf.expand_dims(tf.sequence_mask(en1_pos + 1, seq_length, tf.int64), -1)
-            mask1 = temp + mask1
-            idx = tf.where(tf.equal(mask1, 1))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
-            max1 = tf.reduce_max(part, 1)  # [B,dim]
-
-            mask3 = tf.expand_dims(tf.sequence_mask(en2_pos + 1, seq_length, tf.int64), -1)
-            mask3 = temp + mask3
-            idx = tf.where(tf.equal(mask3, 0))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
-            max3 = tf.reduce_max(part, 1)  # [B,dim]
-
-            mask2 = mask3 - mask1
-            idx = tf.where(tf.equal(mask2, 1))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
-            max2 = tf.reduce_max(part, 1)  # [B,dim]
-            outputs = tf.reshape(tf.stack([max1, max2, max3], -1), [-1, 3 * Config.model.cnn_filters])
-        else:
-            outputs = tf.reduce_max(inputs, 1)
+    def call(self, inputs, length):
+        outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_gru, self.bw_gru, inputs, length, dtype=tf.float32)
+        gru_outputs = tf.concat(outputs, -1)  # [B,seq,2*dim]
+        m = tf.nn.tanh(gru_outputs)
+        alpha = tf.nn.softmax(self.softmax_dense(m), 1)  # [B,seq,1]
+        outputs = tf.reduce_sum(gru_outputs * alpha, 1)  # [B,2*dim]
         return outputs
 
 
@@ -133,14 +112,14 @@ class Selective_Attention(tf.keras.Model):
         # use sparse tensor to reshape sen_matrix
         idx_matrix = tf.sparse_tensor_to_dense(
             tf.SparseTensor(sparse_idx, tf.range(tf.shape(entity_pair_id, out_type=tf.int64)[0]), shape))
-        # new sen_matrix [pair_num, max_pair_count, dim]
+        # new sen_matrix [pair_num, max_pair_count, 2*dim]
         sen_matrix = tf.gather_nd(sen_matrix, tf.expand_dims(idx_matrix, -1))
         # cal sentence-attention
-        relation_repre = tf.keras.layers.Embedding(Config.model.class_num, 3 * Config.model.cnn_filters)(labels)
+        relation_repre = tf.keras.layers.Embedding(Config.model.class_num, 2 * Config.model.gru_units)(labels)
         r = tf.expand_dims(relation_repre, -1)  # [pair_num,dim,1]
         score = tf.squeeze(tf.matmul(sen_matrix, r), -1)  # [pair_num,max_pair_count]
         log_score = tf.exp(score - tf.reduce_max(score, -1, True)) * tf.cast(mask, tf.float32)
         softmax = log_score / (tf.reduce_sum(log_score, -1, True) + 1e-8)
         alpha = tf.expand_dims(softmax, -1)  # [pair_num,max_pair_count,1]
-        sen_att = tf.reduce_sum(alpha * sen_matrix, 1)  # [pair_num, dim]
+        sen_att = tf.reduce_sum(alpha * sen_matrix, 1)  # [pair_num, 2*dim]
         return sen_att, labels
