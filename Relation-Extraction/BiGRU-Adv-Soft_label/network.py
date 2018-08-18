@@ -56,8 +56,6 @@ class Embedding_Layer(tf.keras.Model):
         self.word_embedding = tf.keras.layers.Embedding(wordvec.shape[0], wordvec.shape[1],
                                                         tf.constant_initializer(wordvec, tf.float32),
                                                         name='word_embedding')
-        self.tag_embedding = tf.keras.layers.Embedding(Config.model.tag_num, Config.model.tag_embedding_size,
-                                                       name='tag_embedding')
 
     def call(self, word_id, en_indicator, training):
         word_embedded = self.word_embedding(word_id)

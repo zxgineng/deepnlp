@@ -48,8 +48,6 @@ class Embedding_Layer(tf.keras.Model):
         self.word_embedding = tf.keras.layers.Embedding(wordvec.shape[0], wordvec.shape[1],
                                                         tf.constant_initializer(wordvec, tf.float32),
                                                         name='word_embedding')
-        self.tag_embedding = tf.keras.layers.Embedding(Config.model.tag_num, Config.model.tag_embedding_size,
-                                                       name='tag_embedding')
         self.pos_embedding = tf.keras.layers.Embedding(201, Config.model.position_embedding_size,
                                                        name='position_embedding')
 
@@ -80,27 +78,21 @@ class Pool_Layer(tf.keras.Model):
 
     def call(self, inputs, en1_pos, en2_pos):
         if Config.train.piece_pooling:
-            seq_length = tf.shape(inputs)[1]
-            temp = tf.zeros_like(inputs, tf.int64)
-            mask1 = tf.expand_dims(tf.sequence_mask(en1_pos + 1, seq_length, tf.int64), -1)
-            mask1 = temp + mask1
-            idx = tf.where(tf.equal(mask1, 1))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
+            seq_length, dim = tf.shape(inputs)[1], tf.shape(inputs)[2]
+
+            mask1 = tf.expand_dims(tf.sequence_mask(en1_pos + 1, seq_length, tf.float32), -1)
+            mask1 = tf.tile(mask1, [1, 1, dim])
+            part = tf.where(tf.equal(mask1, 1.0), inputs, mask1)
             max1 = tf.reduce_max(part, 1)  # [B,dim]
 
-            mask3 = tf.expand_dims(tf.sequence_mask(en2_pos + 1, seq_length, tf.int64), -1)
-            mask3 = temp + mask3
-            idx = tf.where(tf.equal(mask3, 0))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
-            max3 = tf.reduce_max(part, 1)  # [B,dim]
-
-            mask2 = mask3 - mask1
-            idx = tf.where(tf.equal(mask2, 1))
-            part = tf.sparse_tensor_to_dense(
-                tf.SparseTensor(idx, tf.gather_nd(inputs, idx), tf.shape(inputs, out_type=tf.int64)))
+            mask2 = tf.expand_dims(tf.sequence_mask(en2_pos + 1, seq_length, tf.float32), -1)
+            mask2 = tf.tile(mask2, [1, 1, dim])
+            part = tf.where(tf.equal(mask2 - mask1, 1.0), inputs, mask2 - mask1)
             max2 = tf.reduce_max(part, 1)  # [B,dim]
+
+            mask3 = 1.0 - mask2
+            part = tf.where(tf.equal(mask3, 1.0), inputs, mask3)
+            max3 = tf.reduce_max(part, 1)  # [B,dim]
             outputs = tf.reshape(tf.stack([max1, max2, max3], -1), [-1, 3 * Config.model.cnn_filters])
         else:
             outputs = tf.reduce_max(inputs, 1)

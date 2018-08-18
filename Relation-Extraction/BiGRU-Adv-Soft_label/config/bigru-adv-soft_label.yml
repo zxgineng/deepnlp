@@ -12,14 +12,12 @@ data:
   wordvec_pkl: 'wordvec.pkl'
 
 model:
-  class_num: 11
-  tag_num: 28
+  class_num: 12
   gru_units: 200
   dropout_keep_prob: 0.5
-  epsilon: 0.5
-  word_embedding_size: 300
-  tag_embedding_size: 50
+  epsilon: 0.02
   entity_indicator_size: 3
+  word_embedding_size: 100
 
 train:
   adversarial_training: 1

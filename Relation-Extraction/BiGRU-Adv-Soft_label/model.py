@@ -41,7 +41,7 @@ class Model:
         elif Config.train.soft_label:
 
             def soft_label():
-                confidence = tf.ones([Config.model.class_num], tf.float32) * 0.7
+                confidence = tf.concat([tf.constant([0.9]),tf.ones([Config.model.class_num-1], tf.float32) * 0.7],-1)
                 soft_score = logits + confidence * tf.reduce_max(logits, -1, True) \
                              * tf.one_hot(labels, Config.model.class_num, dtype=tf.float32)
                 soft_labels = tf.argmax(soft_score, -1)

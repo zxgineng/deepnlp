@@ -124,6 +124,9 @@ def word2id(words, vocab):
     word_id = [vocab.get(word, vocab[UNK]) for word in words]
     return word_id
 
+def id2rel(id, dict):
+    id2rel = {i: t for i, t in enumerate(dict)}
+    return [id2rel[i] for i in id]
 
 def convert_to_example(entity_pair_id, label, word_id, pos_1, pos_2, en1_pos, en2_pos):
     """convert one sample to example"""
@@ -214,7 +217,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train", shuffle
 def create_tfrecord():
     train_file = os.path.join(Config.data.dataset_path, Config.data.train_data)
     train_data = build_and_read_train(train_file)
-    # build_wordvec_pkl()
+    build_wordvec_pkl()
     vocab = load_vocab()
     entity_pair_dict = load_entity_pair()
     rel_dict = load_rel()
