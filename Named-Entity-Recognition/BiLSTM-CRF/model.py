@@ -31,7 +31,7 @@ class Model:
         logits = graph.build(self.features)
 
         transition_params = tf.get_variable("transitions", [Config.model.fc_unit, Config.model.fc_unit])
-        viterbi_sequence, _ = tf.contrib.crf.crf_decode(logits, transition_params, self.features['length'])
+        viterbi_sequence, _ = tf.contrib.crf.crf_decode(logits, transition_params, tf.cast(self.features['length'],tf.int32))
 
         self.predictions = viterbi_sequence
         tf.identity(self.predictions, 'prediction')

@@ -14,7 +14,7 @@ class Model:
         self.inputs = features
         self.targets = labels
         self.loss, self.train_op, self.predictions = None, None, None
-        self.build_graph()
+        self._build_graph()
 
         # train mode: required loss and train_op
         # eval mode: required loss
@@ -26,7 +26,7 @@ class Model:
             train_op=self.train_op,
             predictions=self.predictions)
 
-    def build_graph(self):
+    def _build_graph(self):
         graph = Graph()
         logits, labels = graph(self.inputs, self.targets, self.mode)
 
