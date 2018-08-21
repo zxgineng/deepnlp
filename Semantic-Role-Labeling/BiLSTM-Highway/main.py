@@ -19,9 +19,9 @@ def run(mode, run_config):
         val_data = data_loader.get_tfrecord('test')
         train_input_fn, train_input_hook = data_loader.get_dataset_batch(train_data, buffer_size=5000,
                                                                          batch_size=Config.train.batch_size,
-                                                                         scope="val")
+                                                                         repeat=4)
 
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val",
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, repeat=1,
                                                                      shuffle=False)
 
         while True:
@@ -39,7 +39,7 @@ def run(mode, run_config):
 
     elif mode == 'eval':
         val_data = data_loader.get_tfrecord('test')
-        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, scope="val",
+        val_input_fn, val_input_hook = data_loader.get_dataset_batch(val_data, batch_size=512, repeat=1,
                                                                      shuffle=False)
         estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 

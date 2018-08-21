@@ -200,7 +200,7 @@ def preprocess(serialized):
     return parse_tfrecord(serialized)
 
 
-def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train", shuffle=True):
+def get_dataset_batch(data, buffer_size=1, batch_size=64, repeat=1, shuffle=True):
     class IteratorInitializerHook(tf.train.SessionRunHook):
 
         def __init__(self):
@@ -215,11 +215,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train", shuffle
         input_placeholder = tf.placeholder(tf.string)
         dataset = tf.data.TFRecordDataset(input_placeholder)
         dataset = dataset.map(preprocess)
-
-        if scope == "train":
-            dataset = dataset.repeat(None)  # Infinite iterations
-        else:
-            dataset = dataset.repeat(4)
+        dataset = dataset.repeat(repeat)
         dataset = dataset.shuffle(buffer_size=buffer_size)
         dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [], [-1]))
         iterator = dataset.make_initializable_iterator()
@@ -306,4 +302,3 @@ if __name__ == '__main__':
     Config.data.processed_path = os.path.expanduser(Config.data.processed_path)
 
     create_tfrecord()
-
