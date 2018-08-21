@@ -219,7 +219,7 @@ def get_dataset_batch(data, buffer_size=1, batch_size=64, scope="train", shuffle
         if scope == "train":
             dataset = dataset.repeat(None)  # Infinite iterations
         else:
-            dataset = dataset.repeat(5)
+            dataset = dataset.repeat(4)
         dataset = dataset.shuffle(buffer_size=buffer_size)
         dataset = dataset.padded_batch(batch_size, ([-1], [-1], [-1], [], [-1]))
         iterator = dataset.make_initializable_iterator()

@@ -32,7 +32,7 @@ def run(mode, run_config):
             estimator.train(input_fn=train_input_fn, hooks=[train_input_hook])
             estimator.evaluate(input_fn=val_input_fn, hooks=[val_input_hook])
 
-            Config.train.epoch += 5
+            Config.train.epoch += 4
             if Config.train.epoch >= Config.train.max_epoch:
                 break
 

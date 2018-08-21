@@ -26,6 +26,8 @@ class Graph(tf.keras.Model):
 
         embedded = self.embedding_layer(word_id, tag_id, predicate)
         encoded = self.encoding_layer(embedded, length, training)
+        if training:
+            encoded = tf.nn.dropout(encoded,Config.model.softmax_keep_prob)
         logits = self.softmax_dense(encoded)
 
         return logits
@@ -59,7 +61,7 @@ class Encoding_layer(tf.keras.Model):
             lstm_cell = tf.nn.rnn_cell.LSTMCell(Config.model.lstm_unit, initializer=tf.orthogonal_initializer)
             if training:
                 # variational dropout
-                lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, state_keep_prob=Config.train.keep_prob,
+                lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell, state_keep_prob=Config.model.recurrent_keep_prob,
                                                           variational_recurrent=True, dtype=tf.float32)
             if reverse:
                 reverse_inputs = tf.reverse_sequence(inputs, length, 1)

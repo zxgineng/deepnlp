@@ -90,6 +90,6 @@ class PRFScoreHook(tf.train.SessionRunHook):
         self._summary_writer.flush()
 
         print('*' * 40)
-        print("epoch", Config.train.epoch + 1, 'finished')
+        print("epoch", Config.train.epoch + 4, 'finished')
         print('precision:', p, '    recall:', r, '    f1:', f1)
         print('*' * 40)
