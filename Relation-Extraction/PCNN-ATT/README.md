@@ -111,11 +111,11 @@ input text -> 韩梅梅和李雷的表演受到了大家的好评。
 input entity -> 李雷 韩梅梅
 result -> 合作
 
-input text -> 李雷去参加韩梅梅的家长会
+input text -> 李雷去参加韩梅梅的家长会。
 input entity -> 李雷 韩梅梅
 result -> 父母
 
-input text -> 李雷的表舅叫韩梅梅的二妈为大姐
+input text -> 李雷的表舅叫韩梅梅的二妈为大姐。
 input entity -> 李雷 韩梅梅
 result -> 亲戚
 

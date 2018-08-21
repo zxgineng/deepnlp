@@ -166,5 +166,40 @@ result ->
 二十五日　 E-ARGM-TMP
 进驻　　　 rel  
 运动员村　 S-ARG1
-。　　　　 O     
+。　　　　 O    
+
+input words (separated by space) -> 我们 将 尽可能 安排 符合 资格 的 儿童 填补 现有 的 名额 空缺 。
+input tags (separated by space) -> PN AD AD VV VV NN DEC NN VV JJ DEG NN NN PU
+input predicate -> 安排
+result ->
+我们　　　 S-ARG0
+将　　　　 B-ARGM-ADV
+尽可能　　 E-ARGM-ADV
+安排　　　 rel  
+符合　　　 B-ARG1
+资格　　　 I-ARG1
+的　　　　 I-ARG1
+儿童　　　 E-ARG1
+填补　　　 B-ARG2
+现有　　　 I-ARG2
+的　　　　 I-ARG2
+名额　　　 I-ARG2
+空缺　　　 E-ARG2
+。　　　　 O    
+
+input words (separated by space) -> 过去 的 一 年 ， 中国 利用 外资 五百四十亿 美元 。
+input tags (separated by space) -> NT DEG CD M PU NR VV NN CD M PU
+input predicate -> 利用
+result ->
+过去　　　 B-ARGM-TMP
+的　　　　 I-ARGM-TMP
+一　　　　 I-ARGM-TMP
+年　　　　 E-ARGM-TMP
+,　　　　 O    
+中国　　　 S-ARG0
+利用　　　 rel  
+外资　　　 B-ARG1
+五百四十亿 I-ARG1
+美元　　　 E-ARG1
+。　　　　 O  
 ```
