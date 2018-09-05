@@ -14,7 +14,7 @@ class Model:
         self.mode = mode
         self.inputs = features
         self.targets = labels
-        self.loss, self.train_op, self.predictions, self.evaluation_hooks = None, None, None, None
+        self.loss, self.train_op, self.predictions, self.evaluation_hooks, self.prediction_hooks = None, None, None, None, None
         self.build_graph()
 
         # train mode: required loss and train_op
@@ -34,8 +34,7 @@ class Model:
         if self.mode == tf.estimator.ModeKeys.TRAIN:
             logits = graph(self.inputs, self.mode)
             pred = tf.argmax(logits, -1)
-            accuracy = tf.reduce_mean(tf.cast(tf.equal(pred, self.targets['transition']), tf.float32), -1,
-                                      name='accuracy')
+
             self._build_loss(logits)
             self._build_train_op()
         else:

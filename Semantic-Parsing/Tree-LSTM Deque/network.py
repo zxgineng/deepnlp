@@ -46,7 +46,7 @@ class Graph(tf.keras.Model):
                       for _ in range(2)]
         self.deque_lstm = tf.nn.rnn_cell.MultiRNNCell(lstm_cells)
 
-        self.final_dense = tf.keras.layers.Dense(4 + 4 * Config.model.dep_num, tf.nn.relu,name='softmax_fc')
+        self.final_dense = tf.keras.layers.Dense(4 + 4 * Config.model.dep_num, tf.nn.relu, name='softmax_fc')
 
     def _embedding(self, tree_word_id, tree_pos_id, token_word_id, token_pos_id, history_action_id, deque_word_id,
                    deque_pos_id):
@@ -188,7 +188,8 @@ class TreeLSTMCell(tf.nn.rnn_cell.BasicLSTMCell):
         input_depth = inputs_shape[1].value
         h_depth = self._num_units
         self._kernel = self.add_variable("kernel",
-                                         shape=[input_depth + h_depth, 4 * self._num_units])
+                                         shape=[input_depth + h_depth, 4 * self._num_units],
+                                         initializer=tf.orthogonal_initializer())
         self._bias = self.add_variable("bias",
                                        shape=[4 * self._num_units],
                                        initializer=tf.zeros_initializer(dtype=self.dtype))
