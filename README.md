@@ -2,7 +2,7 @@
 
 TensorFlow implementation of deep learning algorithm for NLP  
 
-- [**Segmentation & Part-Of-Speech Tagger**](Segmentation&Tagging)  
+#### [**Segmentation & Part-Of-Speech Tagger**](Segmentation&Tagging)  
 
 ```
 CNC是由国家语委公布的语料库。
@@ -21,7 +21,7 @@ CNC/ws 是/vl 由/p 国家/n 语委/j 公布/v 的/u 语料库/n 。/w
 朝鲜/ns 弃核/v 承诺/n 受/v 考验/v 被/p 指/v 试图/v 欺骗/v 美国/ns 。/w
 ```
 
-- [**Named Entity Recognition**](Named-Entity-Recognition)  
+#### [**Named Entity Recognition**](Named-Entity-Recognition)  
 
 ```
 PER-人名 LOC-地点 ORG-组织
@@ -42,7 +42,7 @@ PER-人名 LOC-地点 ORG-组织
 [中国人民银行]ORG 行长 [易纲]PER 在 [保加利亚]LOC 出席第七次 [中国]LOC - [中东欧]LOC 国家领导人会晤期间,应 [保加利亚国民银行]ORG 行长 [迪米塔尔·拉德夫]PER 邀请,访问了 [保加利亚国民银行]ORG
 ```
 
-- [**Text Classification**](Text-Classification)  
+#### [**Text Classification**](Text-Classification)  
 
 ```
 驻新泽西记者王忆琼1月6日报道  有人说最孤独的感觉，是在人潮汹涌的街头，却没人可以说话。1月6日的这个夜晚，阿联体会到了这种滋味。76比98输给雄鹿的这场比赛中，队友们都在他身边，也都在奔跑流汗，可没人能提供有效的帮助。阿联一个人12投7中，拿到全队最高的22分，也抵不住球队的溃败。整场比赛，球队里除了阿联，只有洛佩斯(11分)和罗伯茨(12分)得分上双。
@@ -61,7 +61,7 @@ PER-人名 LOC-地点 ORG-组织
 科技
 ```
 
-- [**Dependency Parsing Tree**](Dependency-Parsing) 
+#### [**Dependency Parsing Tree**](Dependency-Parsing) 
 
 Using stanford dependency format  
 
@@ -95,7 +95,7 @@ Using stanford dependency format
 |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |我 |是否 |该 |在| 每次 |换| 工作 |的 |时候| 买卖| 我| 的 |房屋| ？|
 
-- [**Semantic Dependency Graph**](Semantic-Parsing) 
+#### [**Semantic Dependency Graph**](Semantic-Parsing) 
 
 我打开柜门，站在柜门前一下惊呆了。
 
@@ -115,7 +115,7 @@ Using stanford dependency format
 |:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |校长 |说 |他 |无法| 出席 |这次 |会议| 。|
 
-- [**Semantic Role Labeling**](Semantic-Role-Labeling) 
+#### [**Semantic Role Labeling**](Semantic-Role-Labeling) 
 
 
 奥巴马昨晚在白宫发表了演说。  
@@ -148,7 +148,7 @@ Using stanford dependency format
 |:----------:| :----------:|:----------:|:-----:|:-----:|:-----:|
 | ARGM-TMP| | ARG0|rel | ARG1| |
 
-- [**Natural Language Inference**](Natural-Language-Inference)  
+#### [**Natural Language Inference**](Natural-Language-Inference)  
 
 ```
 句子一: 借款失败的原因这是什么原因
@@ -172,7 +172,7 @@ Using stanford dependency format
 结果: 相同意图
 ```
 
-- [**Relation Extraction**](Relation-Extraction)  
+#### [**Relation Extraction**](Relation-Extraction)  
 
 ```
 [李雷]与[韩梅梅]的组合表现出色。
