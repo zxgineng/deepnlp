@@ -24,16 +24,7 @@ class Graph:
         wordvec = load_pretrained_vec()
         embedding = tf.get_variable('embedding', [wordvec.shape[0], wordvec.shape[1]],
                                     initializer=tf.constant_initializer(wordvec, tf.float32))
-
-        if Config.model.ngram:  # 3-gram
-            prev_word = tf.concat([tf.zeros_like(inputs, tf.int64)[:, 0:1], inputs[:, :-1]], -1)
-            next_word = tf.concat([inputs[:, 1:], tf.zeros_like(inputs, tf.int64)[:, 0:1]], -1)
-            prev_embedding = tf.nn.embedding_lookup(embedding, prev_word)
-            origin_embedding = tf.nn.embedding_lookup(embedding, inputs)
-            next_embeedding = tf.nn.embedding_lookup(embedding, next_word)
-            outputs = tf.concat([prev_embedding, origin_embedding, next_embeedding], -1)
-        else:
-            outputs = tf.nn.embedding_lookup(embedding, inputs)
+        outputs = tf.nn.embedding_lookup(embedding, inputs)
         return outputs
 
     def build_gru(self, inputs, length):

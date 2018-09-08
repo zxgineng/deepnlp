@@ -2,6 +2,7 @@
 
 **related papars:**
 
+[Chinese NER Using Lattice LSTM](https://arxiv.org/pdf/1805.02023.pdf) (2018. 5)  
 [Deep contextualized word representations](https://arxiv.org/pdf/1802.05365.pdf) (2018. 3)  
 [Deep Active Learning for Named Entity Recognition](https://arxiv.org/pdf/1707.05928.pdf) (2017. 7)  
 [Semi-supervised sequence tagging with bidirectional language models](https://arxiv.org/pdf/1705.00108.pdf) (2017. 5)  

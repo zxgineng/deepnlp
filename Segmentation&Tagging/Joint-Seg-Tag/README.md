@@ -47,7 +47,6 @@ model:
   fc_unit: 132
   dropout_keep_prob: 0.5
   embedding_size: 100
-  ngram: True # 3-gram rep inputs to gru or not
 
 train:
   batch_size: 10
@@ -102,23 +101,8 @@ Run all evaluation on the test data
 
 Dataset: CNC 
 
-**joint seg and tag with 3-gram rep inputs**
 
-|train loss|eval loss|
-| :----------:| :----------: |
-|![images](images/3-gram-train-loss.png)|![images](images/3-gram-eval-loss.png)|
-
-|segmentation eval score|
-| :----------:|
-|**best F**: 0.9526 **best P**: 0.9565 **best R**: 0.9495 |
-|![images](images/3-gram-seg-score.png)|
-
-|pos tagging eval score|
-| :----------:|
-|**best F**: 0.9197 **best P**: 0.9234 **best R**: 0.9163 |
-|![images](images/3-gram-tag-score.png)|
-
-**joint seg and tag with no n-gram**
+**joint seg and tag**
 
 |train loss|eval loss|
 | :----------:| :----------: |
@@ -134,7 +118,7 @@ Dataset: CNC
 |**best F**: 0.9182 **best P**: 0.9211 **best R**: 0.9158 |
 |![images](images/tag-tag-score.png)|
 
-**only seg label with no n-gram**
+**seg only**
 
 |train loss|eval loss|
 | :----------:| :----------: |
@@ -146,10 +130,8 @@ Dataset: CNC
 |![images](images/seg-score.png)|
 
  
-On this dataset, segmentation result of 3-gram joint is very slightly better than no-gram joint and seg-label only.  
-Segmentaion result of no-gram joint is same as seg-label only.  
-Pos tagging result of 3-gram is very slightly better than no-gram.  
-Need more other dataset experiments to get conclusion.
+On this dataset, seg-tag-joint result is same as seg-only result.   
+Need more experiments to get conclusion.
 
 
 ## Example
