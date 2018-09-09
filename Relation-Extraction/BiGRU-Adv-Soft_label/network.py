@@ -78,9 +78,7 @@ class Encoding_Layer(tf.keras.Model):
     def call(self, inputs, length):
         outputs, states = tf.nn.bidirectional_dynamic_rnn(self.fw_gru, self.bw_gru, inputs, length, dtype=tf.float32)
         gru_outputs = tf.concat(outputs, -1)  # [B,seq,2*dim]
-        m = tf.nn.tanh(gru_outputs)
-        alpha = tf.nn.softmax(self.softmax_dense(m), 1)  # [B,seq,1]
-        outputs = tf.reduce_sum(gru_outputs * alpha, 1)  # [B,2*dim]
+        outputs = gru_outputs[:,-1,:]  # [B,2*dim]
         return outputs
 
 
